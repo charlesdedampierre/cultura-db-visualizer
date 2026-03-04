@@ -44,17 +44,17 @@ export function WorldMap() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [isGlobe, setIsGlobe] = useState(false);
+  const [isGlobe, setIsGlobe] = useState(true);
 
-  const { selectedYear, selectedPolityId, setSelectedPolityId, hierarchyMode, setHierarchyMode } = useAppStore();
+  const { selectedYear, selectedPolityId, setSelectedPolityId, flyToLocation, setFlyToLocation } = useAppStore();
 
   const setSelectedPolityIdRef = useRef(setSelectedPolityId);
   setSelectedPolityIdRef.current = setSelectedPolityId;
 
-  // Fetch active polities
+  // Fetch active polities (always using leaf mode)
   const { data: politiesData, isLoading, error } = useQuery({
-    queryKey: ['activePolities', selectedYear, hierarchyMode],
-    queryFn: () => getActivePolities(selectedYear, hierarchyMode),
+    queryKey: ['activePolities', selectedYear],
+    queryFn: () => getActivePolities(selectedYear, 'leaf'),
   });
 
   // Initialize map once
@@ -64,14 +64,18 @@ export function WorldMap() {
     const mapInstance = new maplibregl.Map({
       container: mapContainer.current,
       style: MAP_STYLE,
-      center: [20, 30],
-      zoom: 2.5,
+      center: [15, 42], // Centered on Roman Empire (Mediterranean)
+      zoom: 3,
       attributionControl: false,
     });
 
     mapInstance.addControl(new maplibregl.NavigationControl(), 'top-right');
 
     mapInstance.on('load', () => {
+      // Set initial globe projection
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (mapInstance as any).setProjection({ type: 'globe' });
+
       mapInstance.addSource('polities', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -136,6 +140,20 @@ export function WorldMap() {
     (map.current as any).setProjection(newIsGlobe ? { type: 'globe' } : { type: 'mercator' });
   }, [isGlobe]);
 
+  // Handle fly-to location
+  useEffect(() => {
+    if (!map.current || !mapReady || !flyToLocation) return;
+
+    map.current.flyTo({
+      center: [flyToLocation.lng, flyToLocation.lat],
+      zoom: flyToLocation.zoom ?? 5,
+      duration: 1500,
+    });
+
+    // Clear the flyToLocation after flying
+    setFlyToLocation(null);
+  }, [flyToLocation, mapReady, setFlyToLocation]);
+
   // Update polities data when year changes or selection changes
   useEffect(() => {
     if (!map.current || !mapReady || !politiesData) return;
@@ -168,7 +186,7 @@ export function WorldMap() {
       {/* Globe toggle button */}
       <button
         onClick={toggleGlobe}
-        className={`absolute top-4 left-36 px-3 py-2 rounded-lg shadow-md text-sm transition-colors flex items-center gap-2 z-10 border ${
+        className={`absolute top-4 left-4 px-3 py-2 rounded-lg shadow-md text-sm transition-colors flex items-center gap-2 z-10 border ${
           isGlobe
             ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
             : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
@@ -188,39 +206,19 @@ export function WorldMap() {
         </svg>
         {isGlobe ? 'Flat' : 'Globe'}
       </button>
-      {/* Hierarchy toggle button */}
-      <button
-        onClick={() => setHierarchyMode(hierarchyMode === 'leaf' ? 'aggregate' : 'leaf')}
-        className={`absolute top-4 left-4 px-3 py-2 rounded-lg shadow-md text-sm transition-colors flex items-center gap-2 z-10 border ${
-          hierarchyMode === 'aggregate'
-            ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-        }`}
-        title={hierarchyMode === 'leaf' ? 'Switch to larger polity groupings (empires)' : 'Switch to smaller polities'}
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-            d={hierarchyMode === 'leaf'
-              ? "M4 6h16M4 12h16M4 18h16"
-              : "M3 4h18v6H3zM3 14h18v6H3z"
-            }
-          />
-        </svg>
-        {hierarchyMode === 'leaf' ? 'Polities' : 'Empires'}
-      </button>
       {isLoading && (
-        <div className="absolute top-4 left-56 bg-white px-3 py-2 rounded-lg shadow-md text-sm text-gray-600">
+        <div className="absolute top-4 left-28 bg-white px-3 py-2 rounded-lg shadow-md text-sm text-gray-600">
           Loading...
         </div>
       )}
       {error && (
-        <div className="absolute top-4 left-56 bg-red-50 text-red-700 px-3 py-2 rounded-lg shadow-md text-sm">
+        <div className="absolute top-4 left-28 bg-red-50 text-red-700 px-3 py-2 rounded-lg shadow-md text-sm">
           Error: {(error as Error).message}
         </div>
       )}
       {politiesData && (
         <div className="absolute bottom-4 left-4 bg-white px-3 py-2 rounded-lg shadow-md text-sm text-gray-600">
-          {politiesData.polities.length} {hierarchyMode === 'leaf' ? 'polities' : 'empires'} active
+          {politiesData.polities.length} polities active
         </div>
       )}
     </div>

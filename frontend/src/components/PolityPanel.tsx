@@ -34,14 +34,14 @@ export function PolityPanel() {
   }
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-start justify-between p-4 border-b border-gray-200">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">{polity?.name ?? 'Loading...'}</h2>
+    <div className="h-full flex flex-col">
+      {/* Compact Header */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 flex-shrink-0">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-gray-900">{polity?.name ?? 'Loading...'}</h2>
           {polity && (
-            <div className="text-sm text-gray-500 mt-1">
-              {polity.type && <span className="mr-3">{polity.type}</span>}
+            <div className="text-xs text-gray-500 flex items-center gap-2">
+              {polity.type && <span className="bg-gray-100 px-2 py-0.5 rounded">{polity.type}</span>}
               <span>
                 {formatYear(polity.from_year)} - {formatYear(polity.to_year)}
               </span>
@@ -50,7 +50,7 @@ export function PolityPanel() {
                   href={polity.wikipedia_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="ml-3 text-blue-600 hover:underline"
+                  className="text-blue-600 hover:underline"
                 >
                   Wikipedia
                 </a>
@@ -58,34 +58,30 @@ export function PolityPanel() {
             </div>
           )}
         </div>
-        <button
-          onClick={() => setSelectedPolityId(null)}
-          className="text-gray-400 hover:text-gray-600 p-1"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
       </div>
 
-      {/* Two-column layout: chart left, individuals right */}
-      <div className="flex items-stretch">
-        {/* Left: Evolution Chart + Occupations */}
-        <div className="w-1/2 p-4 border-r border-gray-200">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Evolution</h3>
-          <div className="h-56">
+      {/* Three-column layout for compact view */}
+      <div className="flex-1 flex min-h-0">
+        {/* Left: Evolution Chart */}
+        <div className="w-[30%] p-3 border-r border-gray-200 flex flex-col">
+          <h3 className="text-xs font-medium text-gray-700 mb-1 flex-shrink-0">Evolution</h3>
+          <div className="flex-1 min-h-0">
             <EvolutionChart />
           </div>
-          <h3 className="text-sm font-medium text-gray-700 mt-4 mb-2">Occupations</h3>
-          <div style={{ height: '28rem' }}>
+        </div>
+
+        {/* Middle: Occupations */}
+        <div className="w-[35%] p-3 border-r border-gray-200 flex flex-col">
+          <h3 className="text-xs font-medium text-gray-700 mb-1 flex-shrink-0">Occupations</h3>
+          <div className="flex-1 min-h-0">
             <OccupationsChart />
           </div>
         </div>
 
-        {/* Right: Individuals List - matches left column height */}
-        <div className="w-1/2 p-4 flex flex-col">
-          <h3 className="text-sm font-medium text-gray-700 mb-2 flex-shrink-0">Notable Individuals</h3>
-          <div className="flex-1 min-h-0">
+        {/* Right: Individuals List */}
+        <div className="w-[35%] p-3 flex flex-col">
+          <h3 className="text-xs font-medium text-gray-700 mb-1 flex-shrink-0">Notable Individuals</h3>
+          <div className="flex-1 min-h-0 overflow-auto">
             <IndividualsList />
           </div>
         </div>

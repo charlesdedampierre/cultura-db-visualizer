@@ -47,7 +47,7 @@ export function TimelineSlider() {
   const stepForward = () => setSelectedYear(Math.min(MAX_YEAR, selectedYear + STEP));
 
   return (
-    <div className="bg-white border-t border-b border-gray-200 px-6 py-3">
+    <div className="bg-white/90 backdrop-blur-sm border-t border-b border-gray-200 px-6 py-3 pb-10">
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center gap-3">
           {/* Step back arrow */}
@@ -76,9 +76,13 @@ export function TimelineSlider() {
               <Slider.Range className="absolute bg-blue-500 rounded-full h-full" />
             </Slider.Track>
             <Slider.Thumb
-              className="block w-5 h-5 bg-white border-2 border-blue-500 rounded-full shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-grab active:cursor-grabbing"
+              className="relative block w-5 h-5 bg-white border-2 border-blue-500 rounded-full shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-grab active:cursor-grabbing"
               aria-label="Year"
-            />
+            >
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-blue-600 text-white font-bold px-3 py-1 rounded-lg text-sm whitespace-nowrap shadow-md">
+                {formatYear(selectedYear)}
+              </div>
+            </Slider.Thumb>
           </Slider.Root>
 
           <span className="text-xs text-gray-400 whitespace-nowrap">{formatYear(MAX_YEAR)}</span>
@@ -94,10 +98,6 @@ export function TimelineSlider() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
           </button>
-
-          <div className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg font-medium min-w-28 text-center text-sm whitespace-nowrap">
-            {formatYear(selectedYear)}
-          </div>
 
           {/* Year input */}
           <div className="flex items-center gap-1">

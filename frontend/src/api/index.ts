@@ -4,6 +4,7 @@ import type {
   PolityTopCities,
   PaginatedIndividuals,
   PolityDetails,
+  PolitySearchResult,
 } from '../types';
 
 const API_BASE = '/api';
@@ -56,4 +57,9 @@ export async function getPolityIndividuals(
   if (impactYear != null) url += `&impact_year=${impactYear}`;
   if (occupation) url += `&occupation=${encodeURIComponent(occupation)}`;
   return fetchJson<PaginatedIndividuals>(url);
+}
+
+// Search polities by name
+export async function searchPolities(query: string, limit = 10): Promise<{ results: PolitySearchResult[] }> {
+  return fetchJson<{ results: PolitySearchResult[] }>(`${API_BASE}/polities/search?q=${encodeURIComponent(query)}&limit=${limit}`);
 }

@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TimelineSlider } from './components/TimelineSlider';
 import { WorldMap } from './components/WorldMap';
 import { PolityPanel } from './components/PolityPanel';
+import { PolitySearch } from './components/PolitySearch';
+import { useAppStore } from './store';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,14 +55,26 @@ function AboutModal({ onClose }: { onClose: () => void }) {
             occupational breakdown, and population evolution over centuries.
           </p>
           <p>
-            Data is sourced from <a href="https://www.wikidata.org" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Wikidata</a>,
-            covering hundreds of thousands of historical figures and thousands of political
-            entities spanning over 5,000 years of recorded history.
-          </p>
-          <p>
             Use the charts to filter individuals by occupation or time period. Toggle between
             a flat map and a 3D globe view for different perspectives on historical geography.
           </p>
+          <div className="pt-3 border-t border-gray-200">
+            <h3 className="font-semibold text-gray-900 mb-2">Data Sources</h3>
+            <ul className="space-y-1 text-gray-600">
+              <li>
+                <a href="https://cultura.bunka.ai" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Cultura Project</a>
+                {' '}- Historical figures and cultural data
+              </li>
+              <li>
+                <a href="https://cliometrica.org" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Cliometrica Project</a>
+                {' '}- Historical polity boundaries
+              </li>
+              <li>
+                <a href="https://www.wikidata.org" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Wikidata</a>
+                {' '}- Linked open data
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
@@ -69,17 +83,19 @@ function AboutModal({ onClose }: { onClose: () => void }) {
 
 function App() {
   const [showAbout, setShowAbout] = useState(false);
+  const { selectedPolityId } = useAppStore();
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen flex flex-col bg-white">
+      <div className="h-screen flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between flex-shrink-0">
+        <header className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between flex-shrink-0 z-20">
           <div className="flex items-center gap-3">
             <LogoIcon className="w-8 h-8" />
             <h1 className="text-lg font-semibold tracking-tight">Historical Polity Visualizer</h1>
           </div>
           <nav className="flex items-center gap-4">
+            <PolitySearch />
             <button
               onClick={() => setShowAbout(true)}
               className="text-sm text-gray-300 hover:text-white transition-colors"
@@ -89,38 +105,31 @@ function App() {
           </nav>
         </header>
 
-        {/* Map - fixed height */}
-        <div className="h-[55vh] relative overflow-hidden flex-shrink-0">
+        {/* Map - takes remaining space, shrinks when panel opens */}
+        <div className={`relative overflow-hidden flex-shrink-0 transition-all duration-300 ${
+          selectedPolityId ? 'h-[55vh]' : 'flex-1'
+        }`}>
           <WorldMap />
-        </div>
-
-        {/* Timeline Slider */}
-        <TimelineSlider />
-
-        {/* Polity Panel - below map, two columns */}
-        <div className="flex-1 border-t border-gray-200 bg-white">
-          <PolityPanel />
-        </div>
-
-        {/* Footer */}
-        <footer className="bg-gray-900 text-gray-400 px-6 py-4 flex-shrink-0">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <LogoIcon className="w-6 h-6" />
-              <span className="text-sm">Historical Polity Visualizer</span>
-            </div>
-            <div className="flex items-center gap-4 text-sm">
-              <button
-                onClick={() => setShowAbout(true)}
-                className="hover:text-white transition-colors"
-              >
-                About
-              </button>
-              <span className="text-gray-600">|</span>
-              <span>Data from <a href="https://www.wikidata.org" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">Wikidata</a></span>
-            </div>
+          {/* Timeline Slider - overlay at bottom of map */}
+          <div className="absolute bottom-0 left-0 right-0 z-10 shadow-lg">
+            <TimelineSlider />
           </div>
-        </footer>
+        </div>
+
+        {/* Polity Panel - below map, expands when polity selected */}
+        {selectedPolityId && (
+          <div className="flex-1 border-t border-gray-200 bg-white overflow-auto relative pt-2">
+            {/* Collapse handle - centered at top */}
+            <button
+              onClick={() => useAppStore.getState().setSelectedPolityId(null)}
+              className="absolute left-1/2 -translate-x-1/2 top-0 z-10 py-2 px-4 group"
+              title="Collapse panel"
+            >
+              <div className="w-10 h-1 bg-gray-300 rounded-full group-hover:bg-gray-500 transition-colors" />
+            </button>
+            <PolityPanel />
+          </div>
+        )}
 
         {/* About modal */}
         {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}

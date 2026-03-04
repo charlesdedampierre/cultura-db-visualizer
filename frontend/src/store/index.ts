@@ -13,6 +13,10 @@ interface AppState {
   selectedPolityId: number | null;
   setSelectedPolityId: (id: number | null) => void;
 
+  // Fly to location
+  flyToLocation: { lng: number; lat: number; zoom?: number } | null;
+  setFlyToLocation: (location: { lng: number; lat: number; zoom?: number } | null) => void;
+
   // Individuals sorting
   sortField: 'sitelinks_count' | 'impact_date';
   sortOrder: 'asc' | 'desc';
@@ -32,8 +36,8 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  // Timeline - default to 1500 CE
-  selectedYear: 1500,
+  // Timeline - default to 200 CE (Roman Empire era)
+  selectedYear: 200,
   setSelectedYear: (year) => set({ selectedYear: year, currentPage: 1 }),
 
   // Hierarchy toggle - default to leaf (smaller polities)
@@ -54,6 +58,10 @@ export const useAppStore = create<AppState>((set) => ({
     filterYear: null,
     filterOccupation: null,
   }),
+
+  // Fly to location
+  flyToLocation: null,
+  setFlyToLocation: (location) => set({ flyToLocation: location }),
 
   // Individuals sorting
   sortField: 'sitelinks_count',

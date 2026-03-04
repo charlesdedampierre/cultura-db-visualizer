@@ -122,6 +122,57 @@ def get_polity_evolution(polity_id: int):
     )
 
 
+@router.get("/search")
+def search_polities(
+    q: str = Query(..., min_length=1, description="Search query for polity name"),
+    limit: int = Query(10, ge=1, le=50, description="Maximum number of results"),
+):
+    """Search polities by name (case-insensitive partial match)."""
+    db = get_db()
+
+    # Use ilike for case-insensitive partial match
+    response = db.table("polities").select(
+        "id, name, type"
+    ).ilike("name", f"%{q}%").limit(limit).execute()
+
+    # Get centroid for each polity from their periods
+    results = []
+    for polity in response.data:
+        # Get geometry for centroid calculation
+        period_response = db.table("polity_periods").select(
+            "geometry"
+        ).eq("polity_id", polity["id"]).limit(1).execute()
+
+        centroid = None
+        if period_response.data and period_response.data[0]["geometry"]:
+            try:
+                geometry = json.loads(period_response.data[0]["geometry"])
+                # Calculate rough centroid from first coordinate
+                if geometry["type"] == "Polygon":
+                    coords = geometry["coordinates"][0]
+                    centroid = [
+                        sum(c[0] for c in coords) / len(coords),
+                        sum(c[1] for c in coords) / len(coords),
+                    ]
+                elif geometry["type"] == "MultiPolygon":
+                    first_poly = geometry["coordinates"][0][0]
+                    centroid = [
+                        sum(c[0] for c in first_poly) / len(first_poly),
+                        sum(c[1] for c in first_poly) / len(first_poly),
+                    ]
+            except (json.JSONDecodeError, KeyError, IndexError):
+                pass
+
+        results.append({
+            "id": polity["id"],
+            "name": polity["name"],
+            "type": polity["type"],
+            "centroid": centroid,
+        })
+
+    return {"results": results}
+
+
 @router.get("/{polity_id}")
 def get_polity(polity_id: int):
     """Get polity details."""

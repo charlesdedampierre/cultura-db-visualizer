@@ -81,3 +81,20 @@ SAVE TO GIT
 PROMPT 04/03/2026
 
 Transfer the database to SUPABASE as the new endpoint. I want the same structure but just other service. the project is in .env
+
+ITERATION
+
+- Add the Globe as the defautl mode
+- onlu add the polities with the lower levels, the more ggranular (forget abnout polities vs empire)s
+- I want to be able to to put down the content of the polity, so that I have the mlapas full screen. When I click on a polity, then the content is coming up
+- in the about, add the fatc that the data come from the Cuktrua Project and the Clippatira project. add an abiolity to search for a polity namle and enter.
+- add the current dates rught at the bottom of the slider point
+
+ITERATION
+
+Iw ant the infromaiton to appear below the map when I clikc, not on the right
+
+Sart with the whole globe on the page centered at the roman empire in 200 AC
+
+ ok, reduce a biut the widht of the tabel, so that the witdh of the 2 other table can be bigger.  make the information globale section a but less height, so that there is a
+  but more for the map
