@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '../store';
 import { getPolityIndividuals } from '../api';
@@ -20,6 +21,7 @@ function truncateText(text: string | null, maxLength: number): string {
 }
 
 export function IndividualsList() {
+  const [nameSearch, setNameSearch] = useState('');
   const {
     selectedPolityId,
     sortField,
@@ -96,6 +98,35 @@ export function IndividualsList() {
         </div>
       )}
 
+      {/* Search input */}
+      <div className="mb-2 flex-shrink-0 relative">
+        <svg
+          className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          value={nameSearch}
+          onChange={(e) => setNameSearch(e.target.value)}
+          placeholder="Search individuals..."
+          className="w-full text-xs pl-7 pr-2 py-1.5 bg-gray-50 border-0 rounded-md focus:outline-none focus:bg-white transition-colors"
+        />
+        {nameSearch && (
+          <button
+            onClick={() => setNameSearch('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-2 flex-shrink-0">
         <span className="text-sm text-gray-500">
@@ -138,7 +169,11 @@ export function IndividualsList() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {data.individuals.map((ind: Individual) => (
+            {data.individuals
+              .filter((ind: Individual) =>
+                !nameSearch || ind.name_en?.toLowerCase().includes(nameSearch.toLowerCase())
+              )
+              .map((ind: Individual) => (
               <tr key={ind.wikidata_id} className="hover:bg-gray-50">
                 <td className="px-2 py-1">
                   <a

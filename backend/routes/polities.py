@@ -127,46 +127,58 @@ def search_polities(
     q: str = Query(..., min_length=1, description="Search query for polity name"),
     limit: int = Query(10, ge=1, le=50, description="Maximum number of results"),
 ):
-    """Search polities by name (case-insensitive partial match)."""
+    """Search polities by name (case-insensitive partial match). Only returns leaf polities shown on map."""
     db = get_db()
 
-    # Use ilike for case-insensitive partial match
+    # Use ilike for case-insensitive partial match, filter to leaf polities only
     response = db.table("polities").select(
         "id, name, type"
-    ).ilike("name", f"%{q}%").limit(limit).execute()
+    ).ilike("name", f"%{q}%").in_("display_mode", ["both", "leaf"]).limit(limit).execute()
 
-    # Get centroid for each polity from their periods
+    # Get centroid and date range for each polity from their periods
     results = []
     for polity in response.data:
-        # Get geometry for centroid calculation
+        # Get geometry and dates for centroid calculation
         period_response = db.table("polity_periods").select(
-            "geometry"
-        ).eq("polity_id", polity["id"]).limit(1).execute()
+            "geometry, from_year, to_year"
+        ).eq("polity_id", polity["id"]).execute()
 
         centroid = None
-        if period_response.data and period_response.data[0]["geometry"]:
-            try:
-                geometry = json.loads(period_response.data[0]["geometry"])
-                # Calculate rough centroid from first coordinate
-                if geometry["type"] == "Polygon":
-                    coords = geometry["coordinates"][0]
-                    centroid = [
-                        sum(c[0] for c in coords) / len(coords),
-                        sum(c[1] for c in coords) / len(coords),
-                    ]
-                elif geometry["type"] == "MultiPolygon":
-                    first_poly = geometry["coordinates"][0][0]
-                    centroid = [
-                        sum(c[0] for c in first_poly) / len(first_poly),
-                        sum(c[1] for c in first_poly) / len(first_poly),
-                    ]
-            except (json.JSONDecodeError, KeyError, IndexError):
-                pass
+        from_year = None
+        to_year = None
+
+        if period_response.data:
+            # Get date range from all periods
+            from_year = min(p["from_year"] for p in period_response.data if p["from_year"] is not None)
+            to_year = max(p["to_year"] for p in period_response.data if p["to_year"] is not None)
+
+            # Get centroid from first period with geometry
+            for period in period_response.data:
+                if period["geometry"]:
+                    try:
+                        geometry = json.loads(period["geometry"])
+                        # Calculate rough centroid from first coordinate
+                        if geometry["type"] == "Polygon":
+                            coords = geometry["coordinates"][0]
+                            centroid = [
+                                sum(c[0] for c in coords) / len(coords),
+                                sum(c[1] for c in coords) / len(coords),
+                            ]
+                        elif geometry["type"] == "MultiPolygon":
+                            first_poly = geometry["coordinates"][0][0]
+                            centroid = [
+                                sum(c[0] for c in first_poly) / len(first_poly),
+                                sum(c[1] for c in first_poly) / len(first_poly),
+                            ]
+                        break
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        pass
 
         results.append({
             "id": polity["id"],
             "name": polity["name"],
-            "type": polity["type"],
+            "from_year": from_year,
+            "to_year": to_year,
             "centroid": centroid,
         })
 

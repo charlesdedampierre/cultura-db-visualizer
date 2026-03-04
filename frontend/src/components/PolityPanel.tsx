@@ -41,7 +41,6 @@ export function PolityPanel() {
           <h2 className="text-lg font-semibold text-gray-900">{polity?.name ?? 'Loading...'}</h2>
           {polity && (
             <div className="text-xs text-gray-500 flex items-center gap-2">
-              {polity.type && <span className="bg-gray-100 px-2 py-0.5 rounded">{polity.type}</span>}
               <span>
                 {formatYear(polity.from_year)} - {formatYear(polity.to_year)}
               </span>

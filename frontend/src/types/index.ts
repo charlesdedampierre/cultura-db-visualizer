@@ -71,6 +71,7 @@ export interface PolityDetails {
 export interface PolitySearchResult {
   id: number;
   name: string;
-  type: string | null;
+  from_year: number | null;
+  to_year: number | null;
   centroid: [number, number] | null;
 }

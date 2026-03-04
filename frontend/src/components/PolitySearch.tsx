@@ -3,6 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '../store';
 import { searchPolities } from '../api';
 
+function formatYear(year: number | null): string {
+  if (year === null) return '?';
+  if (year < 0) return `${Math.abs(year)} BCE`;
+  return `${year} CE`;
+}
+
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
 
@@ -130,10 +136,12 @@ export function PolitySearch() {
                 onClick={() => handleSelect(result)}
                 className="w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
               >
-                <div className="text-sm font-medium text-gray-900">{result.name}</div>
-                {result.type && (
-                  <div className="text-xs text-gray-500">{result.type}</div>
-                )}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-gray-900">{result.name}</span>
+                  <span className="text-xs text-gray-400 whitespace-nowrap">
+                    {formatYear(result.from_year)} - {formatYear(result.to_year)}
+                  </span>
+                </div>
               </button>
             ))
           )}
