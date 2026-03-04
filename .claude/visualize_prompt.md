@@ -125,3 +125,17 @@ make sure the date on thte tbalke filter in the exact impact year
 ❯ the searh does not work on all idnviduals, can't younloadd all the idviudal directly ?
 
 GIT SAVE
+
+for the fame, Add 1 to all of them (0 shoudl become 1)
+
+GIT SAVE
+
+Can yoiu amek ti so that we see the name of the polity of the map directly. First with the bigger polities and the when we move we start to see the samller ones ?
+
+add an impact years range (from 25 to 70 years)
+add the indovudla in the lsit that do not have a date
+check hubetr de dapierr issues
+
+change the round in the graph
+
+make the slider quikcer

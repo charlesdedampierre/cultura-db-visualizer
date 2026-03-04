@@ -10,6 +10,66 @@ const POLITY_COLORS = [
   '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
 ];
 
+// Calculate approximate area of a geometry (in square degrees, rough approximation)
+function calculateApproximateArea(geometry: GeoJSON.Geometry): number {
+  const getPolygonArea = (coords: number[][][]): number => {
+    const ring = coords[0];
+    if (!ring || ring.length < 3) return 0;
+
+    let area = 0;
+    for (let i = 0; i < ring.length - 1; i++) {
+      area += ring[i][0] * ring[i + 1][1];
+      area -= ring[i + 1][0] * ring[i][1];
+    }
+    return Math.abs(area / 2);
+  };
+
+  if (geometry.type === 'Polygon') {
+    return getPolygonArea(geometry.coordinates as number[][][]);
+  } else if (geometry.type === 'MultiPolygon') {
+    const multiCoords = geometry.coordinates as number[][][][];
+    return multiCoords.reduce((total, polygon) => total + getPolygonArea(polygon), 0);
+  }
+  return 0;
+}
+
+// Calculate centroid of a geometry for label placement
+function calculateCentroid(geometry: GeoJSON.Geometry): [number, number] | null {
+  const getPolygonCentroid = (coords: number[][][]): [number, number] => {
+    const ring = coords[0];
+    if (!ring || ring.length === 0) return [0, 0];
+
+    let sumX = 0, sumY = 0;
+    for (const point of ring) {
+      sumX += point[0];
+      sumY += point[1];
+    }
+    return [sumX / ring.length, sumY / ring.length];
+  };
+
+  if (geometry.type === 'Polygon') {
+    return getPolygonCentroid(geometry.coordinates as number[][][]);
+  } else if (geometry.type === 'MultiPolygon') {
+    const multiCoords = geometry.coordinates as number[][][][];
+    let maxArea = 0;
+    let centroid: [number, number] = [0, 0];
+
+    for (const polygon of multiCoords) {
+      const area = Math.abs(polygon[0].reduce((sum, point, i, arr) => {
+        const next = arr[(i + 1) % arr.length];
+        return sum + (point[0] * next[1] - next[0] * point[1]);
+      }, 0) / 2);
+
+      if (area > maxArea) {
+        maxArea = area;
+        centroid = getPolygonCentroid(polygon);
+      }
+    }
+    return centroid;
+  }
+  return null;
+}
+
 const MAP_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
@@ -104,6 +164,54 @@ export function WorldMap() {
         },
       });
 
+      // Add source for polity labels (point data at centroids)
+      mapInstance.addSource('polity-labels', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+
+      // Add symbol layer for polity names
+      // Labels appear based on area: larger polities visible at lower zoom levels
+      mapInstance.addLayer({
+        id: 'polity-labels',
+        type: 'symbol',
+        source: 'polity-labels',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-size': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            1, ['case', ['>', ['get', 'area'], 500], 14, 0],
+            2, ['case', ['>', ['get', 'area'], 100], 15, ['case', ['>', ['get', 'area'], 500], 15, 0]],
+            3, ['case', ['>', ['get', 'area'], 20], 16, 14],
+            5, 17,
+            7, 18,
+          ],
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-anchor': 'center',
+          'text-allow-overlap': false,
+          'text-ignore-placement': false,
+          'text-padding': 3,
+          'text-max-width': 10,
+        },
+        paint: {
+          'text-color': '#1f2937',
+          'text-halo-color': '#ffffff',
+          'text-halo-width': 2,
+          'text-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            1, ['case', ['>', ['get', 'area'], 500], 1, 0],
+            2, ['case', ['>', ['get', 'area'], 100], 1, 0],
+            3, ['case', ['>', ['get', 'area'], 20], 1, 0],
+            4, ['case', ['>', ['get', 'area'], 5], 1, 0],
+            5, 1,
+          ],
+        },
+      });
+
       mapInstance.on('click', 'polities-fill', (e) => {
         if (e.features && e.features.length > 0) {
           const polityId = e.features[0].properties?.id;
@@ -161,17 +269,41 @@ export function WorldMap() {
   useEffect(() => {
     if (!map.current || !mapReady || !politiesData) return;
 
-    const features = politiesData.polities
+    const politiesWithArea = politiesData.polities
       .filter((polity: PolityWithGeometry) => polity.geometry)
       .map((polity: PolityWithGeometry) => ({
+        polity,
+        area: calculateApproximateArea(polity.geometry!),
+        centroid: calculateCentroid(polity.geometry!),
+      }));
+
+    // Create polygon features for fill/outline layers
+    const features = politiesWithArea.map(({ polity, area }) => ({
+      type: 'Feature' as const,
+      properties: {
+        id: polity.id,
+        name: polity.name,
+        color: POLITY_COLORS[polity.id % POLITY_COLORS.length],
+        selected: polity.id === selectedPolityId,
+        area,
+      },
+      geometry: polity.geometry!,
+    }));
+
+    // Create point features for labels at centroids
+    const labelFeatures = politiesWithArea
+      .filter(({ centroid }) => centroid !== null)
+      .map(({ polity, area, centroid }) => ({
         type: 'Feature' as const,
         properties: {
           id: polity.id,
           name: polity.name,
-          color: POLITY_COLORS[polity.id % POLITY_COLORS.length],
-          selected: polity.id === selectedPolityId,
+          area,
         },
-        geometry: polity.geometry!,
+        geometry: {
+          type: 'Point' as const,
+          coordinates: centroid!,
+        },
       }));
 
     const source = map.current.getSource('polities') as maplibregl.GeoJSONSource;
@@ -179,6 +311,15 @@ export function WorldMap() {
       source.setData({
         type: 'FeatureCollection',
         features,
+      });
+    }
+
+    // Update label source
+    const labelSource = map.current.getSource('polity-labels') as maplibregl.GeoJSONSource;
+    if (labelSource) {
+      labelSource.setData({
+        type: 'FeatureCollection',
+        features: labelFeatures,
       });
     }
   }, [politiesData, selectedPolityId, mapReady]);
