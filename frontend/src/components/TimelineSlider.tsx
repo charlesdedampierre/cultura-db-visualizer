@@ -3,7 +3,7 @@ import * as Slider from '@radix-ui/react-slider';
 import { useAppStore } from '../store';
 
 const MIN_YEAR = -3400;
-const MAX_YEAR = 2000;
+const MAX_YEAR = 2024;
 const STEP = 25;
 
 function formatYear(year: number): string {

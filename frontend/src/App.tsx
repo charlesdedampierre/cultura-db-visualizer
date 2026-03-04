@@ -62,11 +62,11 @@ function AboutModal({ onClose }: { onClose: () => void }) {
             <h3 className="font-semibold text-gray-900 mb-2">Data Sources</h3>
             <ul className="space-y-1 text-gray-600">
               <li>
-                <a href="https://cultura.bunka.ai" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Cultura Project</a>
+                <a href="https://github.com/charlesdedampierre/cultura" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Cultura Database</a>
                 {' '}- Historical figures and cultural data
               </li>
               <li>
-                <a href="https://cliometrica.org" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Cliometrica Project</a>
+                <a href="https://github.com/Seshat-Global-History-Databank/cliopatria" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Cliopatria Project</a>
                 {' '}- Historical polity boundaries
               </li>
               <li>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '../store';
 import { getActivePolities } from '../api';
 import type { PolityWithGeometry } from '../types';
@@ -45,6 +45,7 @@ export function WorldMap() {
   const map = useRef<maplibregl.Map | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [isGlobe, setIsGlobe] = useState(true);
+  const queryClient = useQueryClient();
 
   const { selectedYear, selectedPolityId, setSelectedPolityId, flyToLocation, setFlyToLocation } = useAppStore();
 
@@ -52,9 +53,11 @@ export function WorldMap() {
   setSelectedPolityIdRef.current = setSelectedPolityId;
 
   // Fetch active polities (always using leaf mode)
-  const { data: politiesData, isLoading, error } = useQuery({
+  const { data: politiesData, error } = useQuery({
     queryKey: ['activePolities', selectedYear],
     queryFn: () => getActivePolities(selectedYear, 'leaf'),
+    staleTime: Infinity, // Never refetch - cache forever during session
+    placeholderData: (previousData) => previousData, // Keep showing previous data while loading
   });
 
   // Initialize map once
@@ -206,11 +209,6 @@ export function WorldMap() {
         </svg>
         {isGlobe ? 'Flat' : 'Globe'}
       </button>
-      {isLoading && (
-        <div className="absolute top-4 left-28 bg-white px-3 py-2 rounded-lg shadow-md text-sm text-gray-600">
-          Loading...
-        </div>
-      )}
       {error && (
         <div className="absolute top-4 left-28 bg-red-50 text-red-700 px-3 py-2 rounded-lg shadow-md text-sm">
           Error: {(error as Error).message}

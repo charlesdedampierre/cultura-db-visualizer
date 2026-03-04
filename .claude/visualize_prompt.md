@@ -94,7 +94,19 @@ ITERATION
 
 Iw ant the infromaiton to appear below the map when I clikc, not on the right
 
-Sart with the whole globe on the page centered at the roman empire in 200 AC
-
  ok, reduce a biut the widht of the tabel, so that the witdh of the 2 other table can be bigger.  make the information globale section a but less height, so that there is a
   but more for the map
+
+Sart with the whole globe on the page centered at the roman empire in 200 AC
+Add a little arrow or something to toggle down the infromation section (instead of the cross)
+
+GIT SAVE
+
+Remove the loading when I slide on the map, this is too short to need a loading informaiton
+
+❯ in soruce, link this for the cliopatira project: <https://github.com/Seshat-Global-History-Databank/cliopatria>, for the cultrua daatabse, link this:
+  <https://github.com/charlesdedampierre/cultura>
+
+ITERATION
+
+Can you make sure the slider goes up to 2024 ?
