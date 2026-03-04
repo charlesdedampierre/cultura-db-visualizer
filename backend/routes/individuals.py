@@ -22,6 +22,7 @@ def get_polity_individuals(
     order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
     impact_year: int | None = Query(None, description="Filter by impact year bucket"),
     occupation: str | None = Query(None, description="Filter by occupation"),
+    name_search: str | None = Query(None, description="Search by name (case-insensitive)"),
 ):
     """Get paginated list of individuals for a polity."""
     db = get_db()
@@ -38,7 +39,10 @@ def get_polity_individuals(
     ).eq("polity_id", polity_id).not_.is_("impact_date", "null")
 
     if impact_year is not None:
-        query = query.eq("impact_date", impact_year)
+        query = query.eq("impact_date_raw", impact_year)
+
+    if name_search is not None and name_search.strip():
+        query = query.ilike("name_en", f"%{name_search.strip()}%")
 
     if occupation is not None:
         logger.info(f"Filtering by occupation: {occupation}")

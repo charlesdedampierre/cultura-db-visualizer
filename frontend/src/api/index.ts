@@ -52,10 +52,12 @@ export async function getPolityIndividuals(
   order: 'asc' | 'desc',
   impactYear?: number | null,
   occupation?: string | null,
+  nameSearch?: string | null,
 ): Promise<PaginatedIndividuals> {
   let url = `${API_BASE}/individuals/polity/${polityId}?page=${page}&limit=${limit}&sort=${sort}&order=${order}`;
   if (impactYear != null) url += `&impact_year=${impactYear}`;
   if (occupation) url += `&occupation=${encodeURIComponent(occupation)}`;
+  if (nameSearch) url += `&name_search=${encodeURIComponent(nameSearch)}`;
   return fetchJson<PaginatedIndividuals>(url);
 }
 

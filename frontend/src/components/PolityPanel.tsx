@@ -38,7 +38,7 @@ export function PolityPanel() {
       {/* Compact Header */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold text-gray-900">{polity?.name ?? 'Loading...'}</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{polity?.name ?? ''}</h2>
           {polity && (
             <div className="text-xs text-gray-500 flex items-center gap-2">
               <span>

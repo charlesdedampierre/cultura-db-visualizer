@@ -110,3 +110,18 @@ Remove the loading when I slide on the map, this is too short to need a loading 
 ITERATION
 
 Can you make sure the slider goes up to 2024 ?
+
+When is earch a polity, I d'ont want to see the () polity appears, becaude they are not showed in the map
+
+and remove the POLITY metadata, because they are all "Polity"
+
+add a little search on the tbale to search for an indovudla name
+
+remove the different pagination for the Notable Individuals
+ (otherwie the search does not work)
+
+make sure the date on thte tbalke filter in the exact impact year
+
+❯ the searh does not work on all idnviduals, can't younloadd all the idviudal directly ?
+
+GIT SAVE
