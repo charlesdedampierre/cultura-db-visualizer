@@ -244,7 +244,7 @@ export function IndividualsList() {
                   {formatYear(ind.impact_date_raw)}
                 </td>
                 <td className="px-2 py-1 text-right text-gray-600">
-                  {ind.sitelinks_count?.toLocaleString() ?? '-'}
+                  {ind.sitelinks_count != null ? (ind.sitelinks_count + 1).toLocaleString() : '-'}
                 </td>
               </tr>
             ))}
