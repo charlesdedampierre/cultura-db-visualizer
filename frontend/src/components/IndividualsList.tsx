@@ -134,7 +134,7 @@ export function IndividualsList() {
         <div className="mb-2 flex items-center gap-2 flex-shrink-0">
           <span className="text-xs text-gray-500">Filtered by:</span>
           <span
-            className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded cursor-pointer hover:bg-green-200"
+            className="bg-gray-200 text-gray-900 text-xs px-2 py-0.5 rounded cursor-pointer hover:bg-gray-300"
             onClick={() => setFilterOccupation(null)}
           >
             {filterOccupation} ✕
@@ -175,10 +175,10 @@ export function IndividualsList() {
       </div>
       {/* Active search indicator */}
       {submittedSearch && (
-        <div className="mb-2 text-xs text-blue-600 flex-shrink-0 flex items-center gap-2">
+        <div className="mb-2 text-xs text-gray-900 flex-shrink-0 flex items-center gap-2">
           <span>Searching: "{submittedSearch}"</span>
           {isLoading && (
-            <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <div className="w-3 h-3 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
           )}
         </div>
       )}
@@ -194,7 +194,7 @@ export function IndividualsList() {
             onClick={() => handleSort('sitelinks_count')}
             className={`text-xs px-2 py-1 rounded ${
               sortField === 'sitelinks_count'
-                ? 'bg-blue-100 text-blue-700'
+                ? 'bg-gray-200 text-gray-900'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -204,7 +204,7 @@ export function IndividualsList() {
             onClick={() => handleSort('impact_date')}
             className={`text-xs px-2 py-1 rounded ${
               sortField === 'impact_date'
-                ? 'bg-blue-100 text-blue-700'
+                ? 'bg-gray-200 text-gray-900'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -232,12 +232,12 @@ export function IndividualsList() {
                     href={`https://www.wikidata.org/wiki/${ind.wikidata_id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
+                    className="text-gray-900 hover:underline font-medium"
                   >
                     {truncateText(ind.name_en, 25)}
                   </a>
                 </td>
-                <td className="px-2 py-1 text-gray-600">
+                <td className="px-2 py-1 text-gray-700">
                   {truncateText(ind.occupations_en, 30)}
                 </td>
                 <td className="px-2 py-1 text-right text-gray-600 whitespace-nowrap">

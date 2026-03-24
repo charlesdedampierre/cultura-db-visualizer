@@ -132,8 +132,6 @@ export function WorldMap() {
       attributionControl: false,
     });
 
-    mapInstance.addControl(new maplibregl.NavigationControl(), 'top-right');
-
     mapInstance.on('load', () => {
       // Set initial globe projection
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -327,29 +325,41 @@ export function WorldMap() {
   return (
     <div className="absolute inset-0">
       <div ref={mapContainer} className="absolute inset-0" />
-      {/* Globe toggle button */}
-      <button
-        onClick={toggleGlobe}
-        className={`absolute top-4 left-4 px-3 py-2 rounded-lg shadow-md text-sm transition-colors flex items-center gap-2 z-10 border ${
-          isGlobe
-            ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
-            : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-        }`}
-        title={isGlobe ? 'Switch to flat map' : 'Switch to globe view'}
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          {isGlobe ? (
+      {/* Globe/Flat toggle - segmented control */}
+      <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg p-1 flex">
+        <button
+          onClick={() => isGlobe && toggleGlobe()}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+            !isGlobe
+              ? 'bg-gray-900 text-white shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+          title="Flat map view"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
             />
-          ) : (
+          </svg>
+          Flat
+        </button>
+        <button
+          onClick={() => !isGlobe && toggleGlobe()}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+            isGlobe
+              ? 'bg-gray-900 text-white shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+          title="Globe view"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
-          )}
-        </svg>
-        {isGlobe ? 'Flat' : 'Globe'}
-      </button>
+          </svg>
+          Globe
+        </button>
+      </div>
       {error && (
         <div className="absolute top-4 left-28 bg-red-50 text-red-700 px-3 py-2 rounded-lg shadow-md text-sm">
           Error: {(error as Error).message}

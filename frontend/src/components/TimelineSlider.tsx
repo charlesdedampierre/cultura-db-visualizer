@@ -73,13 +73,13 @@ export function TimelineSlider() {
             step={1}
           >
             <Slider.Track className="bg-gray-200 relative grow rounded-full h-2">
-              <Slider.Range className="absolute bg-blue-500 rounded-full h-full" />
+              <Slider.Range className="absolute bg-gray-900 rounded-full h-full" />
             </Slider.Track>
             <Slider.Thumb
-              className="relative block w-5 h-5 bg-white border-2 border-blue-500 rounded-full shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-grab active:cursor-grabbing"
+              className="relative block w-5 h-5 bg-white border-2 border-gray-900 rounded-full shadow-md focus:outline-none focus:ring-2 focus:ring-gray-400 cursor-grab active:cursor-grabbing"
               aria-label="Year"
             >
-              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-blue-600 text-white font-bold px-3 py-1 rounded-lg text-sm whitespace-nowrap shadow-md">
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-gray-900 text-white font-bold px-3 py-1 rounded-lg text-sm whitespace-nowrap shadow-md">
                 {formatYear(selectedYear)}
               </div>
             </Slider.Thumb>
@@ -114,11 +114,11 @@ export function TimelineSlider() {
               placeholder="e.g. 500 BCE"
               className={`w-28 text-sm px-2 py-1.5 rounded border ${
                 inputError ? 'border-red-400 bg-red-50' : 'border-gray-300'
-              } focus:outline-none focus:ring-1 focus:ring-blue-400`}
+              } focus:outline-none focus:ring-1 focus:ring-gray-400`}
             />
             <button
               onClick={handleYearSubmit}
-              className="text-sm px-2 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors whitespace-nowrap"
+              className="text-sm px-2 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors whitespace-nowrap"
             >
               Go
             </button>

@@ -16,27 +16,12 @@ const queryClient = new QueryClient({
   },
 });
 
-function LogoIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="18" fill="#3b82f6" />
-      <circle cx="20" cy="20" r="14" fill="none" stroke="white" strokeWidth="1.5" />
-      <path d="M6 20h28M20 6c-4 4-6 9-6 14s2 10 6 14c4-4 6-9 6-14s-2-10-6-14z" stroke="white" strokeWidth="1.5" fill="none" />
-      <path d="M8 12h24M8 28h24" stroke="white" strokeWidth="1" opacity="0.6" />
-      <circle cx="20" cy="20" r="2" fill="white" />
-    </svg>
-  );
-}
-
 function AboutModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <LogoIcon className="w-8 h-8" />
-            <h2 className="text-xl font-bold text-gray-900">About</h2>
-          </div>
+          <h2 className="text-xl font-bold text-gray-900">About</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -45,7 +30,7 @@ function AboutModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="space-y-3 text-sm text-gray-600 leading-relaxed">
           <p>
-            The <strong>Historical Polity Visualizer</strong> is an interactive tool for exploring
+            The <strong>Cultura Visualiser</strong> is an interactive tool for exploring
             the rise and fall of political entities throughout human history, from ancient
             civilizations to modern states.
           </p>
@@ -90,10 +75,7 @@ function App() {
       <div className="h-screen flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between flex-shrink-0 z-20">
-          <div className="flex items-center gap-3">
-            <LogoIcon className="w-8 h-8" />
-            <h1 className="text-lg font-semibold tracking-tight">Historical Polity Visualizer</h1>
-          </div>
+          <h1 className="text-lg font-semibold tracking-tight">Cultura Visualiser</h1>
           <nav className="flex items-center gap-4">
             <PolitySearch />
             <button

@@ -68,7 +68,7 @@ export function EvolutionChart() {
   return (
     <div className="h-full relative">
       {filterYear != null && (
-        <div className="absolute top-0 right-0 z-10 bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded cursor-pointer"
+        <div className="absolute top-0 right-0 z-10 bg-gray-200 text-gray-900 text-xs px-2 py-0.5 rounded cursor-pointer"
              onClick={() => setFilterYear(null)}>
           {formatYear(filterYear)} ✕
         </div>
@@ -111,12 +111,12 @@ export function EvolutionChart() {
             }}
           />
           {filterYear != null && (
-            <ReferenceLine x={filterYear} stroke="#3b82f6" strokeWidth={2} strokeDasharray="4 4" />
+            <ReferenceLine x={filterYear} stroke="#111827" strokeWidth={2} strokeDasharray="4 4" />
           )}
           <Line
             type="monotone"
             dataKey="count"
-            stroke="#3b82f6"
+            stroke="#111827"
             strokeWidth={2}
             dot={(props) => {
               const { cx, cy, payload, index } = props;
@@ -128,13 +128,13 @@ export function EvolutionChart() {
                   cx={cx}
                   cy={cy}
                   r={isSelected ? 6 : 4}
-                  fill={isSelected ? '#1d4ed8' : '#3b82f6'}
-                  stroke={isSelected ? '#1e40af' : 'none'}
+                  fill={isSelected ? '#030712' : '#111827'}
+                  stroke={isSelected ? '#030712' : 'none'}
                   strokeWidth={isSelected ? 2 : 0}
                 />
               );
             }}
-            activeDot={{ r: 6, fill: '#2563eb' }}
+            activeDot={{ r: 6, fill: '#1f2937' }}
           />
         </LineChart>
       </ResponsiveContainer>

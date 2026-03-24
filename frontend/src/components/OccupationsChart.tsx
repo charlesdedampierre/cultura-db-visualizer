@@ -60,7 +60,7 @@ export function OccupationsChart() {
   return (
     <div className="h-full relative overflow-y-auto">
       {filterOccupation != null && (
-        <div className="absolute top-0 right-0 z-10 bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded cursor-pointer"
+        <div className="absolute top-0 right-0 z-10 bg-gray-200 text-gray-900 text-xs px-2 py-0.5 rounded cursor-pointer"
              onClick={() => setFilterOccupation(null)}>
           {filterOccupation} ✕
         </div>
@@ -118,7 +118,7 @@ export function OccupationsChart() {
                 return (
                   <Cell
                     key={entry.name}
-                    fill={isSelected ? '#059669' : '#10b981'}
+                    fill={isSelected ? '#030712' : '#111827'}
                     opacity={isDimmed ? 0.4 : 1}
                     cursor="pointer"
                   />
