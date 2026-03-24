@@ -92,8 +92,8 @@ function App() {
           selectedPolityId ? 'h-[55vh]' : 'flex-1'
         }`}>
           <WorldMap />
-          {/* Timeline Slider - overlay at bottom of map */}
-          <div className="absolute bottom-0 left-0 right-0 z-10 shadow-lg">
+          {/* Timeline Slider - floating at bottom of map */}
+          <div className="absolute bottom-0 left-0 right-0 z-10">
             <TimelineSlider />
           </div>
         </div>
