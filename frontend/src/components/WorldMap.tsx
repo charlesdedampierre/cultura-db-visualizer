@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '../store';
 import { getActivePolities } from '../api';
 import type { PolityWithGeometry } from '../types';
@@ -105,7 +105,6 @@ export function WorldMap() {
   const map = useRef<maplibregl.Map | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [isGlobe, setIsGlobe] = useState(true);
-  const queryClient = useQueryClient();
 
   const { selectedYear, selectedPolityId, setSelectedPolityId, flyToLocation, setFlyToLocation } = useAppStore();
 

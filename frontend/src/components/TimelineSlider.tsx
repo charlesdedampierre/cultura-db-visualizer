@@ -1,6 +1,9 @@
 import { useState, useCallback } from 'react';
 import * as Slider from '@radix-ui/react-slider';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAppStore } from '../store';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
 
 const MIN_YEAR = -3400;
 const MAX_YEAR = 2024;
@@ -51,16 +54,16 @@ export function TimelineSlider() {
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center gap-3">
           {/* Step back arrow */}
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={stepBack}
             disabled={selectedYear <= MIN_YEAR}
-            className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
             title="Step back 25 years"
+            className="h-8 w-8"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
 
           <span className="text-xs text-gray-400 whitespace-nowrap">{formatYear(MIN_YEAR)}</span>
 
@@ -88,20 +91,20 @@ export function TimelineSlider() {
           <span className="text-xs text-gray-400 whitespace-nowrap">{formatYear(MAX_YEAR)}</span>
 
           {/* Step forward arrow */}
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={stepForward}
             disabled={selectedYear >= MAX_YEAR}
-            className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600"
             title="Step forward 25 years"
+            className="h-8 w-8"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
 
           {/* Year input */}
-          <div className="flex items-center gap-1">
-            <input
+          <div className="flex items-center gap-2">
+            <Input
               type="text"
               value={yearInput}
               onChange={(e) => {
@@ -112,16 +115,11 @@ export function TimelineSlider() {
                 if (e.key === 'Enter') handleYearSubmit();
               }}
               placeholder="e.g. 500 BCE"
-              className={`w-28 text-sm px-2 py-1.5 rounded border ${
-                inputError ? 'border-red-400 bg-red-50' : 'border-gray-300'
-              } focus:outline-none focus:ring-1 focus:ring-gray-400`}
+              className={`w-28 h-8 text-sm ${inputError ? 'border-red-400 bg-red-50' : ''}`}
             />
-            <button
-              onClick={handleYearSubmit}
-              className="text-sm px-2 py-1.5 bg-gray-900 text-white rounded hover:bg-gray-800 transition-colors whitespace-nowrap"
-            >
+            <Button onClick={handleYearSubmit} size="sm">
               Go
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -132,6 +132,10 @@ GIT SAVE
 
 Can yoiu amek ti so that we see the name of the polity of the map directly. First with the bigger polities and the when we move we start to see the samller ones ?
 
+GIT SAVE
+
+Add the top cities
+
 add an impact years range (from 25 to 70 years)
 add the indovudla in the lsit that do not have a date
 check hubetr de dapierr issues

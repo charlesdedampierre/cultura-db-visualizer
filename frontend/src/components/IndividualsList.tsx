@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Search, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAppStore } from '../store';
 import { getPolityIndividuals } from '../api';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { Input } from './ui/input';
 import type { Individual } from '../types';
 
 const ITEMS_PER_PAGE = 50;
@@ -18,21 +22,6 @@ function truncateText(text: string | null, maxLength: number): string {
   if (!text) return '-';
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength) + '...';
-}
-
-// Debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-
-  return debouncedValue;
 }
 
 export function IndividualsList() {
@@ -133,46 +122,39 @@ export function IndividualsList() {
       {filterOccupation && (
         <div className="mb-2 flex items-center gap-2 flex-shrink-0">
           <span className="text-xs text-gray-500">Filtered by:</span>
-          <span
-            className="bg-gray-200 text-gray-900 text-xs px-2 py-0.5 rounded cursor-pointer hover:bg-gray-300"
+          <Badge
+            variant="secondary"
+            className="cursor-pointer hover:bg-gray-200"
             onClick={() => setFilterOccupation(null)}
           >
-            {filterOccupation} ✕
-          </span>
+            {filterOccupation} <X className="ml-1 h-3 w-3" />
+          </Badge>
         </div>
       )}
 
       {/* Search input */}
-      <div className="mb-2 flex-shrink-0 flex gap-1">
-        <div className="relative flex-1">
-          <svg
-            className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
+      <div className="mb-2 flex-shrink-0">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+          <Input
             type="text"
             value={nameSearch}
             onChange={(e) => setNameSearch(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search name + Enter"
-            className="w-full text-xs pl-7 pr-7 py-1.5 bg-gray-50 border-0 rounded-md focus:outline-none focus:bg-white transition-colors"
+            className="h-8 text-xs pl-8 pr-8"
           />
           {(nameSearch || submittedSearch) && (
             <button
               onClick={clearSearch}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
       </div>
+
       {/* Active search indicator */}
       {submittedSearch && (
         <div className="mb-2 text-xs text-gray-900 flex-shrink-0 flex items-center gap-2">
@@ -189,27 +171,23 @@ export function IndividualsList() {
           {data.total.toLocaleString()} individual{data.total !== 1 ? 's' : ''}
           {filterOccupation || submittedSearch ? ' (filtered)' : ''}
         </span>
-        <div className="flex gap-2">
-          <button
+        <div className="flex gap-1">
+          <Button
+            variant={sortField === 'sitelinks_count' ? 'default' : 'secondary'}
+            size="sm"
             onClick={() => handleSort('sitelinks_count')}
-            className={`text-xs px-2 py-1 rounded ${
-              sortField === 'sitelinks_count'
-                ? 'bg-gray-200 text-gray-900'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            className="h-7 text-xs"
           >
             Fame{getSortIndicator('sitelinks_count')}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant={sortField === 'impact_date' ? 'default' : 'secondary'}
+            size="sm"
             onClick={() => handleSort('impact_date')}
-            className={`text-xs px-2 py-1 rounded ${
-              sortField === 'impact_date'
-                ? 'bg-gray-200 text-gray-900'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
+            className="h-7 text-xs"
           >
             Date{getSortIndicator('impact_date')}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -255,23 +233,29 @@ export function IndividualsList() {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2 border-t border-gray-100 flex-shrink-0">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
             disabled={currentPage === 1}
-            className="px-3 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-7 text-xs"
           >
+            <ChevronLeft className="h-3 w-3 mr-1" />
             Previous
-          </button>
+          </Button>
           <span className="text-xs text-gray-500">
             Page {currentPage} of {totalPages}
           </span>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
             disabled={currentPage === totalPages}
-            className="px-3 py-1 text-xs bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-7 text-xs"
           >
             Next
-          </button>
+            <ChevronRight className="h-3 w-3 ml-1" />
+          </Button>
         </div>
       )}
     </div>

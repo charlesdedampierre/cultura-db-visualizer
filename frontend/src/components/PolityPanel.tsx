@@ -14,7 +14,7 @@ function formatYear(year: number | null): string {
 }
 
 export function PolityPanel() {
-  const { selectedPolityId, setSelectedPolityId } = useAppStore();
+  const { selectedPolityId } = useAppStore();
 
   const { data: polity } = useQuery({
     queryKey: ['polityDetails', selectedPolityId],
