@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TimelineSlider } from './components/TimelineSlider';
 import { WorldMap } from './components/WorldMap';
@@ -74,8 +74,16 @@ function App() {
   const [isPanelVisible, setIsPanelVisible] = useState(false);
   const [shouldRenderPanel, setShouldRenderPanel] = useState(false);
 
+  // Draggable panel height (percentage of viewport height for the map)
+  const [mapHeightPercent, setMapHeightPercent] = useState(55);
+  const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (selectedPolityId) {
+      // Reset height to default when selecting a new polity
+      setMapHeightPercent(55);
+
       // Opening: render immediately, then show
       setShouldRenderPanel(true);
       requestAnimationFrame(() => {
@@ -93,9 +101,45 @@ function App() {
     }
   }, [selectedPolityId]);
 
+  // Handle drag to resize panel
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const headerHeight = 52; // Approximate header height
+      const footerHeight = 36; // Approximate footer height
+      const availableHeight = containerRect.height - headerHeight - footerHeight;
+      const mouseY = e.clientY - containerRect.top - headerHeight;
+
+      // Calculate percentage (clamped between 25% and 85%)
+      const percent = Math.min(85, Math.max(25, (mouseY / availableHeight) * 100));
+      setMapHeightPercent(percent);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="h-screen flex flex-col overflow-hidden">
+      <div ref={containerRef} className="h-screen flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between flex-shrink-0 z-20">
           <h1 className="text-lg font-semibold tracking-tight">Cultura Visualiser</h1>
@@ -111,9 +155,12 @@ function App() {
         </header>
 
         {/* Map - takes remaining space, shrinks when panel opens */}
-        <div className={`relative overflow-hidden flex-shrink-0 transition-all duration-300 ease-in-out ${
-          isPanelVisible ? 'h-[55vh]' : 'flex-1'
-        }`}>
+        <div
+          className={`relative overflow-hidden flex-shrink-0 ${
+            isDragging ? '' : 'transition-all duration-300 ease-in-out'
+          } ${!isPanelVisible ? 'flex-1' : ''}`}
+          style={isPanelVisible ? { height: `${mapHeightPercent}%` } : undefined}
+        >
           <WorldMap />
           {/* Timeline Slider - floating at bottom of map */}
           <div className="absolute bottom-0 left-0 right-0 z-10">
@@ -123,22 +170,27 @@ function App() {
 
         {/* Polity Panel - below map, expands when polity selected */}
         <div
-          className={`overflow-hidden relative transition-all duration-300 ease-in-out ${
-            isPanelVisible ? 'flex-1' : 'h-0'
-          }`}
+          className={`overflow-hidden relative ${
+            isDragging ? '' : 'transition-all duration-300 ease-in-out'
+          } ${isPanelVisible ? 'flex-1' : 'h-0'}`}
           style={{
             opacity: isPanelVisible ? 1 : 0,
             transform: isPanelVisible ? 'translateY(0)' : 'translateY(20px)'
           }}
         >
-          {/* Collapse handle - subtle line at top */}
-          <button
-            onClick={() => useAppStore.getState().setSelectedPolityId(null)}
-            className="absolute left-1/2 -translate-x-1/2 top-1 z-10 py-1 px-4 group"
-            title="Collapse panel"
+          {/* Drag handle - drag to resize, click to collapse */}
+          <div
+            onMouseDown={handleMouseDown}
+            onDoubleClick={() => useAppStore.getState().setSelectedPolityId(null)}
+            className={`absolute left-0 right-0 top-0 z-10 h-4 flex items-center justify-center cursor-ns-resize group ${
+              isDragging ? 'bg-gray-200' : 'hover:bg-gray-200/50'
+            } transition-colors`}
+            title="Drag to resize, double-click to close"
           >
-            <div className="w-8 h-1 bg-gray-300 rounded-full group-hover:bg-gray-400 transition-colors" />
-          </button>
+            <div className={`w-10 h-1 rounded-full transition-colors ${
+              isDragging ? 'bg-gray-500' : 'bg-gray-300 group-hover:bg-gray-400'
+            }`} />
+          </div>
           {shouldRenderPanel && <PolityPanel />}
         </div>
 

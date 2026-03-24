@@ -38,6 +38,7 @@ export function IndividualsList() {
     filterOccupation,
     setFilterOccupation,
     filterYear,
+    setIndividualsCount,
   } = useAppStore();
 
   // Reset page when filters change
@@ -76,6 +77,13 @@ export function IndividualsList() {
         : Promise.resolve(null),
     enabled: !!selectedPolityId,
   });
+
+  // Update individuals count in store
+  useEffect(() => {
+    if (data?.total != null) {
+      setIndividualsCount(data.total);
+    }
+  }, [data?.total, setIndividualsCount]);
 
   if (!selectedPolityId) {
     return (
@@ -165,41 +173,25 @@ export function IndividualsList() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2 flex-shrink-0">
-        <span className="text-sm text-gray-500">
-          {data.total.toLocaleString()} individual{data.total !== 1 ? 's' : ''}
-          {filterOccupation || submittedSearch ? ' (filtered)' : ''}
-        </span>
-        <div className="flex gap-1">
-          <Button
-            variant={sortField === 'sitelinks_count' ? 'default' : 'secondary'}
-            size="sm"
-            onClick={() => handleSort('sitelinks_count')}
-            className="h-7 text-xs"
-          >
-            Fame{getSortIndicator('sitelinks_count')}
-          </Button>
-          <Button
-            variant={sortField === 'impact_date' ? 'default' : 'secondary'}
-            size="sm"
-            onClick={() => handleSort('impact_date')}
-            className="h-7 text-xs"
-          >
-            Date{getSortIndicator('impact_date')}
-          </Button>
-        </div>
-      </div>
-
       {/* Scrollable table */}
       <div className="flex-1 overflow-y-auto min-h-0">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 sticky top-0">
+          <thead className="bg-gray-100 sticky top-0">
             <tr>
               <th className="text-left px-2 py-1.5 font-medium text-gray-600">Name</th>
               <th className="text-left px-2 py-1.5 font-medium text-gray-600">Occupation</th>
-              <th className="text-right px-2 py-1.5 font-medium text-gray-600">Impact Year</th>
-              <th className="text-right px-2 py-1.5 font-medium text-gray-600">Fame</th>
+              <th
+                className="text-right px-2 py-1.5 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
+                onClick={() => handleSort('impact_date')}
+              >
+                Year{getSortIndicator('impact_date')}
+              </th>
+              <th
+                className="text-right px-2 py-1.5 font-medium text-gray-600 cursor-pointer hover:text-gray-900 select-none"
+                onClick={() => handleSort('sitelinks_count')}
+              >
+                Fame{getSortIndicator('sitelinks_count')}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">

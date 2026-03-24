@@ -33,6 +33,10 @@ interface AppState {
   filterOccupation: string | null;
   setFilterOccupation: (occupation: string | null) => void;
   clearFilters: () => void;
+
+  // Individuals count
+  individualsCount: number | null;
+  setIndividualsCount: (count: number | null) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -89,4 +93,8 @@ export const useAppStore = create<AppState>((set) => ({
     currentPage: 1,
   })),
   clearFilters: () => set({ filterYear: null, filterOccupation: null, currentPage: 1 }),
+
+  // Individuals count
+  individualsCount: null,
+  setIndividualsCount: (count) => set({ individualsCount: count }),
 }));

@@ -15,7 +15,7 @@ function formatYear(year: number | null): string {
 }
 
 export function PolityPanel() {
-  const { selectedPolityId } = useAppStore();
+  const { selectedPolityId, individualsCount } = useAppStore();
 
   const { data: polity } = useQuery({
     queryKey: ['polityDetails', selectedPolityId],
@@ -80,7 +80,9 @@ export function PolityPanel() {
 
         {/* Right: Individuals List */}
         <div className="w-[35%] flex flex-col">
-          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2 flex-shrink-0">Notable Individuals</h3>
+          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2 flex-shrink-0">
+            Notable Individuals{individualsCount !== null && ` (${individualsCount.toLocaleString()})`}
+          </h3>
           <div className="flex-1 min-h-0 overflow-auto p-3">
             <IndividualsList />
           </div>
