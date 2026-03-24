@@ -364,11 +364,6 @@ export function WorldMap() {
           Error: {(error as Error).message}
         </div>
       )}
-      {politiesData && (
-        <div className="absolute bottom-4 left-4 bg-white px-3 py-2 rounded-lg shadow-md text-sm text-gray-600">
-          {politiesData.polities.length} polities active
-        </div>
-      )}
     </div>
   );
 }
