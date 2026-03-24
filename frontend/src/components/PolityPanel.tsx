@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { ExternalLink } from 'lucide-react';
 import { useAppStore } from '../store';
 import { getPolityDetails } from '../api';
 import { EvolutionChart } from './EvolutionChart';
@@ -35,52 +36,52 @@ export function PolityPanel() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Compact Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold text-gray-900">{polity?.name ?? ''}</h2>
+      {/* Clean Header - no borders */}
+      <div className="px-6 pt-4 pb-2 flex-shrink-0">
+        <div className="flex items-baseline gap-3">
+          <h2 className="text-xl font-semibold text-gray-900">{polity?.name ?? ''}</h2>
           {polity && (
-            <div className="text-xs text-gray-500 flex items-center gap-2">
-              <span>
-                {formatYear(polity.from_year)} - {formatYear(polity.to_year)}
+            <>
+              <span className="text-sm text-gray-400">
+                {formatYear(polity.from_year)} – {formatYear(polity.to_year)}
               </span>
               {polity.wikipedia_url && (
                 <a
                   href={polity.wikipedia_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  Wikipedia
+                  <ExternalLink className="h-4 w-4" />
                 </a>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>
 
-      {/* Three-column layout for compact view */}
-      <div className="flex-1 flex min-h-0">
+      {/* Three-column layout with subtle separators */}
+      <div className="flex-1 flex min-h-0 px-4 pb-4 gap-6">
         {/* Left: Evolution Chart */}
-        <div className="w-[30%] p-3 border-r border-gray-200 flex flex-col">
-          <h3 className="text-xs font-medium text-gray-700 mb-1 flex-shrink-0">Evolution</h3>
-          <div className="flex-1 min-h-0">
+        <div className="w-[30%] flex flex-col">
+          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2 flex-shrink-0">Evolution</h3>
+          <div className="flex-1 min-h-0 bg-gray-50/50 rounded-xl p-3">
             <EvolutionChart />
           </div>
         </div>
 
         {/* Middle: Occupations */}
-        <div className="w-[35%] p-3 border-r border-gray-200 flex flex-col">
-          <h3 className="text-xs font-medium text-gray-700 mb-1 flex-shrink-0">Occupations</h3>
-          <div className="flex-1 min-h-0">
+        <div className="w-[35%] flex flex-col">
+          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2 flex-shrink-0">Occupations</h3>
+          <div className="flex-1 min-h-0 bg-gray-50/50 rounded-xl p-3">
             <OccupationsChart />
           </div>
         </div>
 
         {/* Right: Individuals List */}
-        <div className="w-[35%] p-3 flex flex-col">
-          <h3 className="text-xs font-medium text-gray-700 mb-1 flex-shrink-0">Notable Individuals</h3>
-          <div className="flex-1 min-h-0 overflow-auto">
+        <div className="w-[35%] flex flex-col">
+          <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2 flex-shrink-0">Notable Individuals</h3>
+          <div className="flex-1 min-h-0 overflow-auto bg-gray-50/50 rounded-xl p-3">
             <IndividualsList />
           </div>
         </div>

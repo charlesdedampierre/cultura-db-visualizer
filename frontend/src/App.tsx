@@ -100,14 +100,14 @@ function App() {
 
         {/* Polity Panel - below map, expands when polity selected */}
         {selectedPolityId && (
-          <div className="flex-1 border-t border-gray-200 bg-white overflow-auto relative pt-2">
-            {/* Collapse handle - centered at top */}
+          <div className="flex-1 bg-white overflow-auto relative">
+            {/* Collapse handle - subtle line at top */}
             <button
               onClick={() => useAppStore.getState().setSelectedPolityId(null)}
-              className="absolute left-1/2 -translate-x-1/2 top-0 z-10 py-2 px-4 group"
+              className="absolute left-1/2 -translate-x-1/2 top-1 z-10 py-1 px-4 group"
               title="Collapse panel"
             >
-              <div className="w-10 h-1 bg-gray-300 rounded-full group-hover:bg-gray-500 transition-colors" />
+              <div className="w-8 h-1 bg-gray-200 rounded-full group-hover:bg-gray-400 transition-colors" />
             </button>
             <PolityPanel />
           </div>
