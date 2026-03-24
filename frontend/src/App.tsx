@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TimelineSlider } from './components/TimelineSlider';
 import { WorldMap } from './components/WorldMap';
@@ -70,6 +70,29 @@ function App() {
   const [showAbout, setShowAbout] = useState(false);
   const { selectedPolityId } = useAppStore();
 
+  // Track panel visibility with delayed unmount for smooth animation
+  const [isPanelVisible, setIsPanelVisible] = useState(false);
+  const [shouldRenderPanel, setShouldRenderPanel] = useState(false);
+
+  useEffect(() => {
+    if (selectedPolityId) {
+      // Opening: render immediately, then show
+      setShouldRenderPanel(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsPanelVisible(true);
+        });
+      });
+    } else {
+      // Closing: hide first, then unmount after transition
+      setIsPanelVisible(false);
+      const timer = setTimeout(() => {
+        setShouldRenderPanel(false);
+      }, 300); // Match transition duration
+      return () => clearTimeout(timer);
+    }
+  }, [selectedPolityId]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <div className="h-screen flex flex-col overflow-hidden">
@@ -88,8 +111,8 @@ function App() {
         </header>
 
         {/* Map - takes remaining space, shrinks when panel opens */}
-        <div className={`relative overflow-hidden flex-shrink-0 transition-all duration-300 ${
-          selectedPolityId ? 'h-[55vh]' : 'flex-1'
+        <div className={`relative overflow-hidden flex-shrink-0 transition-all duration-300 ease-in-out ${
+          isPanelVisible ? 'h-[55vh]' : 'flex-1'
         }`}>
           <WorldMap />
           {/* Timeline Slider - floating at bottom of map */}
@@ -99,19 +122,25 @@ function App() {
         </div>
 
         {/* Polity Panel - below map, expands when polity selected */}
-        {selectedPolityId && (
-          <div className="flex-1 bg-white overflow-auto relative">
-            {/* Collapse handle - subtle line at top */}
-            <button
-              onClick={() => useAppStore.getState().setSelectedPolityId(null)}
-              className="absolute left-1/2 -translate-x-1/2 top-1 z-10 py-1 px-4 group"
-              title="Collapse panel"
-            >
-              <div className="w-8 h-1 bg-gray-200 rounded-full group-hover:bg-gray-400 transition-colors" />
-            </button>
-            <PolityPanel />
-          </div>
-        )}
+        <div
+          className={`overflow-hidden relative transition-all duration-300 ease-in-out ${
+            isPanelVisible ? 'flex-1' : 'h-0'
+          }`}
+          style={{
+            opacity: isPanelVisible ? 1 : 0,
+            transform: isPanelVisible ? 'translateY(0)' : 'translateY(20px)'
+          }}
+        >
+          {/* Collapse handle - subtle line at top */}
+          <button
+            onClick={() => useAppStore.getState().setSelectedPolityId(null)}
+            className="absolute left-1/2 -translate-x-1/2 top-1 z-10 py-1 px-4 group"
+            title="Collapse panel"
+          >
+            <div className="w-8 h-1 bg-gray-300 rounded-full group-hover:bg-gray-400 transition-colors" />
+          </button>
+          {shouldRenderPanel && <PolityPanel />}
+        </div>
 
         {/* Footer */}
         <footer className="bg-gray-900 text-gray-400 px-6 py-2 flex items-center justify-center gap-2 text-xs flex-shrink-0">

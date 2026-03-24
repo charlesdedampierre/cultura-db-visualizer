@@ -215,7 +215,7 @@ export function IndividualsList() {
                     {truncateText(ind.name_en, 25)}
                   </a>
                 </td>
-                <td className="px-2 py-1 text-gray-700">
+                <td className="px-2 py-1 text-gray-800">
                   {truncateText(ind.occupations_en, 30)}
                 </td>
                 <td className="px-2 py-1 text-right text-gray-600 whitespace-nowrap">

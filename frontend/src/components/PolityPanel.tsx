@@ -35,7 +35,7 @@ export function PolityPanel() {
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-gray-100">
       {/* Clean Header - no borders */}
       <div className="px-6 pt-4 pb-2 flex-shrink-0">
         <div className="flex items-baseline gap-3">
@@ -65,7 +65,7 @@ export function PolityPanel() {
         {/* Left: Evolution Chart */}
         <div className="w-[30%] flex flex-col">
           <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2 flex-shrink-0">Evolution</h3>
-          <div className="flex-1 min-h-0 bg-gray-50/50 rounded-xl p-3">
+          <div className="flex-1 min-h-0 p-3">
             <EvolutionChart />
           </div>
         </div>
@@ -73,7 +73,7 @@ export function PolityPanel() {
         {/* Middle: Occupations */}
         <div className="w-[35%] flex flex-col">
           <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2 flex-shrink-0">Occupations</h3>
-          <div className="flex-1 min-h-0 bg-gray-50/50 rounded-xl p-3">
+          <div className="flex-1 min-h-0 p-3">
             <OccupationsChart />
           </div>
         </div>
@@ -81,7 +81,7 @@ export function PolityPanel() {
         {/* Right: Individuals List */}
         <div className="w-[35%] flex flex-col">
           <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2 flex-shrink-0">Notable Individuals</h3>
-          <div className="flex-1 min-h-0 overflow-auto bg-gray-50/50 rounded-xl p-3">
+          <div className="flex-1 min-h-0 overflow-auto p-3">
             <IndividualsList />
           </div>
         </div>
