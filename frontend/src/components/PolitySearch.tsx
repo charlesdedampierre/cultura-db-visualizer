@@ -30,7 +30,7 @@ export function PolitySearch() {
   const [isOpen, setIsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { setSelectedPolityId, setFlyToLocation } = useAppStore();
+  const { setSelectedPolityId, setFlyToLocation, setSelectedYear } = useAppStore();
 
   const debouncedQuery = useDebounce(query, 300);
 
@@ -59,8 +59,11 @@ export function PolitySearch() {
   }, []);
 
   const handleSelect = useCallback(
-    (result: { id: number; centroid: [number, number] | null }) => {
+    (result: { id: number; centroid: [number, number] | null; from_year: number | null }) => {
       setSelectedPolityId(result.id);
+      if (result.from_year !== null) {
+        setSelectedYear(result.from_year);
+      }
       if (result.centroid) {
         setFlyToLocation({
           lng: result.centroid[0],
@@ -71,7 +74,7 @@ export function PolitySearch() {
       setQuery('');
       setIsOpen(false);
     },
-    [setSelectedPolityId, setFlyToLocation]
+    [setSelectedPolityId, setFlyToLocation, setSelectedYear]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
