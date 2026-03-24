@@ -113,6 +113,13 @@ function App() {
           </div>
         )}
 
+        {/* Footer */}
+        <footer className="bg-gray-900 text-gray-400 px-6 py-2 flex items-center justify-center gap-2 text-xs flex-shrink-0">
+          <span>© 2026</span>
+          <span className="text-gray-600">·</span>
+          <span>Made by <a href="https://bunka.ai" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-white transition-colors">bunka.ai</a></span>
+        </footer>
+
         {/* About modal */}
         {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
       </div>
