@@ -95,11 +95,18 @@ def search_cities(
         if pid not in polity_years or (year is not None and (polity_years[pid] is None or year < polity_years[pid])):
             polity_years[pid] = year
 
-    # Deduplicate by city_id, keeping the entry with the MOST individuals (strongest association)
-    # This ensures cities are associated with the polity they're most connected to,
-    # not just the earliest polity where someone from that city appeared
+    # Deduplicate by city_id with smart polity selection:
+    # 1. Prefer polity whose name contains the city name (e.g., Babylon → Babylonia)
+    # 2. Otherwise, use the polity with the most individuals
     city_map: dict[str, dict] = {}
     query_lower = q.lower()
+
+    def city_matches_polity(city_name: str, polity_name: str) -> bool:
+        """Check if city name is related to polity name."""
+        city_lower = city_name.lower()
+        polity_lower = polity_name.lower()
+        # Check if city name is contained in polity name or vice versa
+        return city_lower in polity_lower or polity_lower in city_lower
 
     for row in response.data:
         polity_id = row["polity_id"]
@@ -112,11 +119,15 @@ def search_cities(
         city_name = row["city_name"]
         individual_count = row["individual_count"]
         polity_from_year = polity_years.get(polity_id)
+        polity_name = polity_names.get(polity_id, "Unknown")
 
         # Check if this is an exact match or starts with query
         name_lower = city_name.lower()
         is_exact = name_lower == query_lower
         starts_with = name_lower.startswith(query_lower)
+
+        # Check if city name matches polity name
+        name_matches = city_matches_polity(city_name, polity_name)
 
         if city_id not in city_map:
             # First occurrence of this city with a leaf polity
@@ -127,15 +138,25 @@ def search_cities(
                 "lon": row["lon"],
                 "count": individual_count,
                 "polity_id": polity_id,
-                "polity_name": polity_names.get(polity_id, "Unknown"),
+                "polity_name": polity_name,
                 "polity_from_year": polity_from_year,
                 "_is_exact": is_exact,
                 "_starts_with": starts_with,
+                "_name_matches": name_matches,
             }
         else:
-            # Check if this leaf polity has MORE individuals (stronger association)
-            existing_count = city_map[city_id]["count"]
-            if individual_count > existing_count:
+            existing = city_map[city_id]
+            existing_name_matches = existing.get("_name_matches", False)
+
+            # Prefer name match over non-name match
+            # If both match (or both don't), prefer more individuals
+            should_replace = False
+            if name_matches and not existing_name_matches:
+                should_replace = True
+            elif name_matches == existing_name_matches and individual_count > existing["count"]:
+                should_replace = True
+
+            if should_replace:
                 city_map[city_id] = {
                     "city_id": city_id,
                     "name": city_name,
@@ -143,10 +164,11 @@ def search_cities(
                     "lon": row["lon"],
                     "count": individual_count,
                     "polity_id": polity_id,
-                    "polity_name": polity_names.get(polity_id, "Unknown"),
+                    "polity_name": polity_name,
                     "polity_from_year": polity_from_year,
                     "_is_exact": is_exact,
                     "_starts_with": starts_with,
+                    "_name_matches": name_matches,
                 }
 
     # Sort: exact matches first, then starts-with, then by count
