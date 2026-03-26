@@ -95,7 +95,9 @@ def search_cities(
         if pid not in polity_years or (year is not None and (polity_years[pid] is None or year < polity_years[pid])):
             polity_years[pid] = year
 
-    # Deduplicate by city_id, keeping the entry with the earliest leaf polity
+    # Deduplicate by city_id, keeping the entry with the MOST individuals (strongest association)
+    # This ensures cities are associated with the polity they're most connected to,
+    # not just the earliest polity where someone from that city appeared
     city_map: dict[str, dict] = {}
     query_lower = q.lower()
 
@@ -108,6 +110,7 @@ def search_cities(
 
         city_id = row["city_id"]
         city_name = row["city_name"]
+        individual_count = row["individual_count"]
         polity_from_year = polity_years.get(polity_id)
 
         # Check if this is an exact match or starts with query
@@ -122,7 +125,7 @@ def search_cities(
                 "name": city_name,
                 "lat": row["lat"],
                 "lon": row["lon"],
-                "count": row["individual_count"],
+                "count": individual_count,
                 "polity_id": polity_id,
                 "polity_name": polity_names.get(polity_id, "Unknown"),
                 "polity_from_year": polity_from_year,
@@ -130,15 +133,15 @@ def search_cities(
                 "_starts_with": starts_with,
             }
         else:
-            # Check if this leaf polity is earlier
-            existing_year = city_map[city_id]["polity_from_year"]
-            if polity_from_year is not None and (existing_year is None or polity_from_year < existing_year):
+            # Check if this leaf polity has MORE individuals (stronger association)
+            existing_count = city_map[city_id]["count"]
+            if individual_count > existing_count:
                 city_map[city_id] = {
                     "city_id": city_id,
                     "name": city_name,
                     "lat": row["lat"],
                     "lon": row["lon"],
-                    "count": row["individual_count"],
+                    "count": individual_count,
                     "polity_id": polity_id,
                     "polity_name": polity_names.get(polity_id, "Unknown"),
                     "polity_from_year": polity_from_year,

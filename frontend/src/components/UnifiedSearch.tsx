@@ -130,6 +130,12 @@ export function UnifiedSearch() {
 
   const handleSelectCity = useCallback(
     (result: SearchResult) => {
+      console.log('handleSelectCity called with:', {
+        cityName: result.name,
+        polityId: result.polityId,
+        polityName: result.polityName,
+        polityFromYear: result.polityFromYear,
+      });
       if (result.polityId) {
         setSelectedPolityId(result.polityId);
       }
