@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TimelineSlider } from './components/TimelineSlider';
 import { WorldMap } from './components/WorldMap';
 import { PolityPanel } from './components/PolityPanel';
-import { PolitySearch } from './components/PolitySearch';
+import { UnifiedSearch } from './components/UnifiedSearch';
 import { useAppStore } from './store';
 
 const queryClient = new QueryClient({
@@ -144,7 +144,7 @@ function App() {
         <header className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between flex-shrink-0 z-20">
           <h1 className="text-lg font-semibold tracking-tight">Cultura Visualiser</h1>
           <nav className="flex items-center gap-4">
-            <PolitySearch />
+            <UnifiedSearch />
             <button
               onClick={() => setShowAbout(true)}
               className="text-sm text-gray-300 hover:text-white transition-colors"

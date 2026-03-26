@@ -1,15 +1,23 @@
-"""Create tables in Supabase."""
+"""
+Create tables in Supabase.
 
-import os
-import httpx
-from dotenv import load_dotenv
+This script outputs the SQL schema needed for the visualizer.
+Copy and paste the SQL into Supabase Dashboard > SQL Editor to create tables.
 
-load_dotenv()
+Tables:
+- polities: Polity metadata with display_mode
+- polity_periods: Geometries with time periods
+- cities: City coordinates
+- individuals_light: Individual-polity pairs
+- evolution_cache: Pre-computed counts per polity/year
+- top_cities_cache: Pre-computed top cities per polity
 
-SUPABASE_URL = os.getenv("SUPABASE_Project_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_API_KEY")
+Usage:
+    python scripts/create_tables.py
+"""
 
 SQL_SCHEMA = """
+-- Polities table
 CREATE TABLE IF NOT EXISTS polities (
     id BIGINT PRIMARY KEY,
     name TEXT,
@@ -20,6 +28,7 @@ CREATE TABLE IF NOT EXISTS polities (
     display_mode TEXT DEFAULT 'both'
 );
 
+-- Polity periods with geometries
 CREATE TABLE IF NOT EXISTS polity_periods (
     id BIGINT PRIMARY KEY,
     polity_id BIGINT REFERENCES polities(id),
@@ -30,6 +39,7 @@ CREATE TABLE IF NOT EXISTS polity_periods (
     geometry TEXT
 );
 
+-- Cities
 CREATE TABLE IF NOT EXISTS cities (
     id TEXT PRIMARY KEY,
     name_en TEXT,
@@ -38,6 +48,7 @@ CREATE TABLE IF NOT EXISTS cities (
     iso_country_name TEXT
 );
 
+-- Individuals (one row per individual-polity pair)
 CREATE TABLE IF NOT EXISTS individuals_light (
     wikidata_id TEXT,
     name_en TEXT,
@@ -51,6 +62,7 @@ CREATE TABLE IF NOT EXISTS individuals_light (
     PRIMARY KEY (wikidata_id, polity_id)
 );
 
+-- Evolution cache (pre-computed counts per polity/year)
 CREATE TABLE IF NOT EXISTS evolution_cache (
     polity_id BIGINT REFERENCES polities(id),
     year INTEGER,
@@ -58,6 +70,7 @@ CREATE TABLE IF NOT EXISTS evolution_cache (
     PRIMARY KEY (polity_id, year)
 );
 
+-- Top cities cache (pre-computed top cities per polity)
 CREATE TABLE IF NOT EXISTS top_cities_cache (
     polity_id BIGINT REFERENCES polities(id),
     city_id TEXT,
@@ -68,50 +81,32 @@ CREATE TABLE IF NOT EXISTS top_cities_cache (
     PRIMARY KEY (polity_id, city_id)
 );
 
+-- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_pp_polity ON polity_periods(polity_id);
 CREATE INDEX IF NOT EXISTS idx_pp_years ON polity_periods(from_year, to_year);
 CREATE INDEX IF NOT EXISTS idx_il_polity ON individuals_light(polity_id);
 CREATE INDEX IF NOT EXISTS idx_il_polity_sitelinks ON individuals_light(polity_id, sitelinks_count DESC);
 CREATE INDEX IF NOT EXISTS idx_il_polity_impact ON individuals_light(polity_id, impact_date);
+CREATE INDEX IF NOT EXISTS idx_tcc_polity ON top_cities_cache(polity_id);
+
+-- Enable text search on individual names
+CREATE INDEX IF NOT EXISTS idx_il_name_trgm ON individuals_light USING gin (name_en gin_trgm_ops);
 """
 
-def create_tables():
-    """Create tables using Supabase SQL API."""
-    print(f"Supabase URL: {SUPABASE_URL}")
-
-    # Try using the SQL endpoint (requires service_role key)
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-    }
-
-    # Execute each statement separately
-    statements = [s.strip() for s in SQL_SCHEMA.split(';') if s.strip()]
-
-    for i, stmt in enumerate(statements, 1):
-        print(f"\n[{i}/{len(statements)}] Executing: {stmt[:50]}...")
-
-        response = httpx.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/exec_sql",
-            headers=headers,
-            json={"query": stmt},
-            timeout=30,
-        )
-
-        if response.status_code == 200:
-            print(f"  OK")
-        elif response.status_code == 404:
-            print(f"  SQL RPC not available. You need to create tables manually.")
-            print(f"\n  Copy this SQL to Supabase Dashboard > SQL Editor:\n")
-            print(SQL_SCHEMA)
-            return False
-        else:
-            print(f"  Error {response.status_code}: {response.text}")
-
-    print("\nTables created successfully!")
-    return True
+def main():
+    print("=" * 60)
+    print("Supabase Schema")
+    print("=" * 60)
+    print()
+    print("Copy and paste the following SQL into Supabase Dashboard > SQL Editor:")
+    print()
+    print("-" * 60)
+    print(SQL_SCHEMA)
+    print("-" * 60)
+    print()
+    print("Note: You may need to enable the pg_trgm extension first:")
+    print("  CREATE EXTENSION IF NOT EXISTS pg_trgm;")
 
 
 if __name__ == "__main__":
-    create_tables()
+    main()

@@ -39,7 +39,7 @@ export async function getPolityEvolution(polityId: number): Promise<PolityEvolut
 }
 
 // Get top cities for a polity
-export async function getPolityTopCities(polityId: number, limit = 10): Promise<PolityTopCities> {
+export async function getPolityTopCities(polityId: number, limit = 100): Promise<PolityTopCities> {
   return fetchJson<PolityTopCities>(`${API_BASE}/cities/polity/${polityId}?limit=${limit}`);
 }
 
@@ -64,4 +64,19 @@ export async function getPolityIndividuals(
 // Search polities by name
 export async function searchPolities(query: string, limit = 10): Promise<{ results: PolitySearchResult[] }> {
   return fetchJson<{ results: PolitySearchResult[] }>(`${API_BASE}/polities/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+}
+
+// Search cities by name
+export interface CitySearchResult {
+  city_id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  count: number;
+  polity_id: number;
+  polity_from_year: number | null;
+}
+
+export async function searchCities(query: string, limit = 20): Promise<{ results: CitySearchResult[] }> {
+  return fetchJson<{ results: CitySearchResult[] }>(`${API_BASE}/cities/search?q=${encodeURIComponent(query)}&limit=${limit}`);
 }

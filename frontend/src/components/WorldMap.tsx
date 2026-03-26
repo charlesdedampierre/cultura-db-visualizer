@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '../store';
-import { getActivePolities } from '../api';
+import { getActivePolities, getPolityTopCities } from '../api';
 import type { PolityWithGeometry } from '../types';
 
 const POLITY_COLORS = [
@@ -31,6 +31,58 @@ function calculateApproximateArea(geometry: GeoJSON.Geometry): number {
     return multiCoords.reduce((total, polygon) => total + getPolygonArea(polygon), 0);
   }
   return 0;
+}
+
+// Point-in-polygon test using ray casting algorithm
+function pointInPolygon(point: [number, number], polygon: number[][]): boolean {
+  const [x, y] = point;
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i][0], yi = polygon[i][1];
+    const xj = polygon[j][0], yj = polygon[j][1];
+
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+}
+
+// Check if a point is inside a geometry (Polygon or MultiPolygon)
+function pointInGeometry(lon: number, lat: number, geometry: GeoJSON.Geometry): boolean {
+  const point: [number, number] = [lon, lat];
+
+  if (geometry.type === 'Polygon') {
+    const coords = geometry.coordinates as number[][][];
+    // Check outer ring (first ring)
+    if (!pointInPolygon(point, coords[0])) return false;
+    // Check holes (remaining rings) - point should NOT be in any hole
+    for (let i = 1; i < coords.length; i++) {
+      if (pointInPolygon(point, coords[i])) return false;
+    }
+    return true;
+  } else if (geometry.type === 'MultiPolygon') {
+    const multiCoords = geometry.coordinates as number[][][][];
+    // Point should be in at least one polygon
+    for (const polygon of multiCoords) {
+      if (pointInPolygon(point, polygon[0])) {
+        // Check holes
+        let inHole = false;
+        for (let i = 1; i < polygon.length; i++) {
+          if (pointInPolygon(point, polygon[i])) {
+            inHole = true;
+            break;
+          }
+        }
+        if (!inHole) return true;
+      }
+    }
+    return false;
+  }
+
+  return false;
 }
 
 // Calculate centroid of a geometry for label placement
@@ -106,10 +158,26 @@ export function WorldMap() {
   const [mapReady, setMapReady] = useState(false);
   const [isGlobe, setIsGlobe] = useState(true);
 
-  const { selectedYear, selectedPolityId, setSelectedPolityId, flyToLocation, setFlyToLocation } = useAppStore();
+  const { selectedYear, selectedPolityId, setSelectedPolityId, flyToLocation, setFlyToLocation, showCities, setShowCities, setCitiesForPolity } = useAppStore();
 
   const setSelectedPolityIdRef = useRef(setSelectedPolityId);
   setSelectedPolityIdRef.current = setSelectedPolityId;
+
+  // Fetch cities for selected polity (prefetch in background when polity is selected)
+  const { data: citiesData } = useQuery({
+    queryKey: ['polityTopCities', selectedPolityId],
+    queryFn: () => getPolityTopCities(selectedPolityId!, 100),
+    enabled: !!selectedPolityId, // Only fetch when a polity is selected
+    staleTime: Infinity, // Cache forever during session
+    gcTime: Infinity, // Keep in cache
+  });
+
+  // Cache cities when they arrive
+  useEffect(() => {
+    if (citiesData && selectedPolityId) {
+      setCitiesForPolity(selectedPolityId, citiesData.cities);
+    }
+  }, [citiesData, selectedPolityId, setCitiesForPolity]);
 
   // Fetch active polities (always using leaf mode)
   const { data: politiesData, error } = useQuery({
@@ -205,6 +273,74 @@ export function WorldMap() {
             3, ['case', ['>', ['get', 'area'], 20], 1, 0],
             4, ['case', ['>', ['get', 'area'], 5], 1, 0],
             5, 1,
+          ],
+        },
+      });
+
+      // Add source for cities
+      mapInstance.addSource('cities', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+
+      // Add circle layer for cities
+      // Size based on normalized size (1-10), visibility based on zoom level
+      mapInstance.addLayer({
+        id: 'cities-circles',
+        type: 'circle',
+        source: 'cities',
+        paint: {
+          'circle-color': '#dc2626',
+          'circle-opacity': 0.85,
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 1,
+          // Size based on normalized size (1-10) and zoom level
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            3, ['interpolate', ['linear'], ['get', 'size'], 1, 3, 5, 5, 10, 10],
+            6, ['interpolate', ['linear'], ['get', 'size'], 1, 4, 5, 8, 10, 14],
+            10, ['interpolate', ['linear'], ['get', 'size'], 1, 5, 5, 10, 10, 20],
+          ],
+        },
+      });
+
+      // Add labels for cities
+      // Labels appear based on zoom and normalized size - biggest first, then smaller as you zoom
+      mapInstance.addLayer({
+        id: 'cities-labels',
+        type: 'symbol',
+        source: 'cities',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-size': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            3, ['interpolate', ['linear'], ['get', 'size'], 8, 12, 10, 14],
+            6, ['interpolate', ['linear'], ['get', 'size'], 5, 13, 10, 16],
+            10, 15,
+          ],
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-anchor': 'bottom',
+          'text-offset': [0, -0.5],
+          'text-allow-overlap': false,
+          'text-optional': true,
+        },
+        paint: {
+          'text-color': '#7f1d1d',
+          'text-halo-color': '#ffffff',
+          'text-halo-width': 2,
+          // Opacity based on zoom and size - big cities always visible, small ones appear when zooming
+          'text-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            3, ['case', ['>=', ['get', 'size'], 8], 1, 0],
+            5, ['case', ['>=', ['get', 'size'], 5], 1, 0],
+            7, ['case', ['>=', ['get', 'size'], 3], 1, 0],
+            9, 1,
           ],
         },
       });
@@ -321,6 +457,78 @@ export function WorldMap() {
     }
   }, [politiesData, selectedPolityId, mapReady]);
 
+  // Update cities when polity changes or showCities changes
+  // Cities are filtered to only show within the current polity's borders
+  useEffect(() => {
+    if (!map.current || !mapReady) return;
+
+    const citiesSource = map.current.getSource('cities') as maplibregl.GeoJSONSource;
+    if (!citiesSource) return;
+
+    // If cities are hidden or no polity selected, clear the cities
+    if (!showCities || !selectedPolityId || !citiesData || !politiesData) {
+      citiesSource.setData({ type: 'FeatureCollection', features: [] });
+      return;
+    }
+
+    // Get the current polity's geometry at the selected time
+    const currentPolity = politiesData.polities.find(
+      (p: PolityWithGeometry) => p.id === selectedPolityId
+    );
+
+    if (!currentPolity?.geometry) {
+      citiesSource.setData({ type: 'FeatureCollection', features: [] });
+      return;
+    }
+
+    // Get cities for the selected polity from API response
+    const allCities = citiesData?.cities || [];
+
+    // Filter cities to only those within the current polity's borders
+    const citiesInBorders = allCities.filter(city =>
+      pointInGeometry(city.lon, city.lat, currentPolity.geometry!)
+    );
+
+    if (citiesInBorders.length === 0) {
+      citiesSource.setData({ type: 'FeatureCollection', features: [] });
+      return;
+    }
+
+    // Calculate normalized sizes using log transformation (1-10 range)
+    // Based on cities within borders
+    const counts = citiesInBorders.map(c => c.count);
+    const minCount = Math.min(...counts);
+    const maxCount = Math.max(...counts);
+    const logMin = Math.log(minCount + 1);
+    const logMax = Math.log(maxCount + 1);
+    const logRange = logMax - logMin || 1;
+
+    // Convert to GeoJSON features with normalized size
+    const cityFeatures = citiesInBorders.map(city => {
+      // Log transform and normalize to 1-10 range
+      const logValue = Math.log(city.count + 1);
+      const normalizedSize = 1 + ((logValue - logMin) / logRange) * 9; // 1 to 10
+
+      return {
+        type: 'Feature' as const,
+        properties: {
+          name: city.name,
+          count: city.count,
+          size: normalizedSize, // 1-10 normalized size
+        },
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [city.lon, city.lat],
+        },
+      };
+    });
+
+    citiesSource.setData({
+      type: 'FeatureCollection',
+      features: cityFeatures,
+    });
+  }, [selectedPolityId, showCities, citiesData, mapReady, politiesData]);
+
   return (
     <div className="absolute inset-0">
       <div ref={mapContainer} className="absolute inset-0" />
@@ -359,6 +567,30 @@ export function WorldMap() {
           Globe
         </button>
       </div>
+      {/* Cities toggle - only show when polity is selected */}
+      {selectedPolityId && (
+        <div className="absolute top-16 left-4 z-10">
+          <button
+            onClick={() => setShowCities(!showCities)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all shadow-lg ${
+              showCities
+                ? 'bg-red-600 text-white'
+                : 'bg-white/90 backdrop-blur-sm text-gray-600 hover:text-gray-800'
+            }`}
+            title={showCities ? 'Hide cities' : 'Show cities'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+              />
+            </svg>
+            Cities
+          </button>
+        </div>
+      )}
       {error && (
         <div className="absolute top-4 left-28 bg-red-50 text-red-700 px-3 py-2 rounded-lg shadow-md text-sm">
           Error: {(error as Error).message}

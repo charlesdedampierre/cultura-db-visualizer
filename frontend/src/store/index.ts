@@ -1,5 +1,17 @@
 import { create } from 'zustand';
 
+// Type for cities data from API
+interface CityFromAPI {
+  city_id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  count: number;
+}
+
+// Cache of cities per polity (polity_id -> cities array)
+type CitiesCache = Record<number, CityFromAPI[]>;
+
 interface AppState {
   // Timeline
   selectedYear: number;
@@ -12,6 +24,15 @@ interface AppState {
   // Selected polity
   selectedPolityId: number | null;
   setSelectedPolityId: (id: number | null) => void;
+
+  // Cities toggle
+  showCities: boolean;
+  setShowCities: (show: boolean) => void;
+
+  // Cities cache (per polity)
+  citiesCache: CitiesCache;
+  setCitiesForPolity: (polityId: number, cities: CityFromAPI[]) => void;
+  getCitiesForPolity: (polityId: number) => CityFromAPI[] | undefined;
 
   // Fly to location
   flyToLocation: { lng: number; lat: number; zoom?: number } | null;
@@ -62,6 +83,20 @@ export const useAppStore = create<AppState>((set) => ({
     filterYear: null,
     filterOccupation: null,
   }),
+
+  // Cities toggle
+  showCities: false,
+  setShowCities: (show) => set({ showCities: show }),
+
+  // Cities cache
+  citiesCache: {},
+  setCitiesForPolity: (polityId, cities) => set((state) => ({
+    citiesCache: { ...state.citiesCache, [polityId]: cities }
+  })),
+  getCitiesForPolity: () => {
+    // This is a selector, but we'll access it via getState()
+    return undefined; // Placeholder - use useAppStore.getState().citiesCache[polityId]
+  },
 
   // Fly to location
   flyToLocation: null,

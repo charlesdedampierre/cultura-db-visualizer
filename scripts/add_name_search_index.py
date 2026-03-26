@@ -1,69 +1,44 @@
-"""Add trigram index for fast name search."""
+"""
+Add trigram index for fast name search in Supabase.
 
-import os
-import psycopg2
-from dotenv import load_dotenv
+This enables fast ILIKE/similarity queries on the name_en column.
+Run this once after creating the tables.
 
-load_dotenv()
+Usage:
+    python scripts/add_name_search_index.py
 
-DB_PASSWORD = os.getenv("SUPABASE_DB_PASSWORD")
-PROJECT_REF = "ucfmffrrhbwxrfcfkxkg"
+Or copy the SQL below and run in Supabase Dashboard > SQL Editor:
 
-
-def get_connection():
-    """Connect to Supabase PostgreSQL."""
-    # Try direct connection
-    conn_str = f"postgresql://postgres:{DB_PASSWORD}@db.{PROJECT_REF}.supabase.co:5432/postgres"
-    try:
-        conn = psycopg2.connect(conn_str, connect_timeout=30)
-        print("Connected to Supabase PostgreSQL")
-        return conn
-    except Exception as e:
-        print(f"Direct connection failed: {e}")
-
-    # Try pooler
-    conn_str = f"postgresql://postgres.{PROJECT_REF}:{DB_PASSWORD}@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
-    try:
-        conn = psycopg2.connect(conn_str, connect_timeout=30)
-        print("Connected via pooler")
-        return conn
-    except Exception as e:
-        print(f"Pooler connection failed: {e}")
-        raise
-
-
-def add_trigram_index():
-    print("Adding trigram index for fast name search...")
-
-    conn = get_connection()
-    conn.autocommit = True
-    cursor = conn.cursor()
-
-    # Enable pg_trgm extension
-    print("1. Enabling pg_trgm extension...")
-    cursor.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
-    print("   Done!")
-
-    # Create GIN index for fast text search
-    print("2. Creating GIN trigram index on name_en (this may take a moment)...")
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_individuals_light_name_trgm
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    CREATE INDEX IF NOT EXISTS idx_individuals_light_name_trgm
         ON individuals_light USING gin (name_en gin_trgm_ops);
-    """)
-    print("   Done!")
+"""
 
-    # Verify index exists
-    cursor.execute("""
-        SELECT indexname FROM pg_indexes
-        WHERE tablename = 'individuals_light' AND indexname LIKE '%trgm%';
-    """)
-    indexes = cursor.fetchall()
-    print(f"\nTrigram indexes: {[i[0] for i in indexes]}")
 
-    cursor.close()
-    conn.close()
-    print("\nIndex created successfully! Name search should now be much faster.")
+def main():
+    print("=" * 60)
+    print("Name Search Index")
+    print("=" * 60)
+    print()
+    print("Copy and paste the following SQL into Supabase Dashboard > SQL Editor:")
+    print()
+    print("-" * 60)
+    print("""
+-- Enable trigram extension for fast text search
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- Create GIN index on name_en for fast ILIKE queries
+CREATE INDEX IF NOT EXISTS idx_individuals_light_name_trgm
+    ON individuals_light USING gin (name_en gin_trgm_ops);
+
+-- Optional: Create index on city name for search
+CREATE INDEX IF NOT EXISTS idx_top_cities_name_trgm
+    ON top_cities_cache USING gin (city_name gin_trgm_ops);
+""")
+    print("-" * 60)
+    print()
+    print("After running this, name searches will be much faster!")
 
 
 if __name__ == "__main__":
-    add_trigram_index()
+    main()
