@@ -74,11 +74,13 @@ def search_cities(
         "id, name"
     ).in_("id", polity_ids).execute()
 
-    # Build a set of leaf polity IDs (names NOT starting with '(')
+    # Build a set of leaf polity IDs (names NOT starting with '(') and their names
     leaf_polity_ids = set()
+    polity_names: dict[int, str] = {}
     for p in polities_response.data:
         if p["name"] and not p["name"].startswith("("):
             leaf_polity_ids.add(p["id"])
+            polity_names[p["id"]] = p["name"]
 
     # Get periods for leaf polities only
     periods_response = db.table("polity_periods").select(
@@ -122,6 +124,7 @@ def search_cities(
                 "lon": row["lon"],
                 "count": row["individual_count"],
                 "polity_id": polity_id,
+                "polity_name": polity_names.get(polity_id, "Unknown"),
                 "polity_from_year": polity_from_year,
                 "_is_exact": is_exact,
                 "_starts_with": starts_with,
@@ -137,6 +140,7 @@ def search_cities(
                     "lon": row["lon"],
                     "count": row["individual_count"],
                     "polity_id": polity_id,
+                    "polity_name": polity_names.get(polity_id, "Unknown"),
                     "polity_from_year": polity_from_year,
                     "_is_exact": is_exact,
                     "_starts_with": starts_with,

@@ -552,11 +552,13 @@ def generate_evolution_json(source_conn, skip_ids, output_path):
     cursor = source_conn.cursor()
 
     # Get distinct polity IDs
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT DISTINCT ic.polity_id
         FROM individuals_cliopatria ic
         WHERE ic.impact_date IS NOT NULL AND ic.polity_id IS NOT NULL
-    """)
+    """
+    )
 
     polity_ids = set()
     for row in cursor:
@@ -572,13 +574,16 @@ def generate_evolution_json(source_conn, skip_ids, output_path):
     evolution_data = {}
 
     for polity_id in tqdm(polity_ids, desc="Computing evolution"):
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT ic.impact_date, COUNT(DISTINCT ic.wikidata_id) as cnt
             FROM individuals_cliopatria ic
             WHERE ic.polity_id LIKE ? AND ic.impact_date IS NOT NULL
             GROUP BY ic.impact_date
             ORDER BY ic.impact_date
-        """, (f"%{polity_id}%",))
+        """,
+            (f"%{polity_id}%",),
+        )
 
         year_counts = defaultdict(int)
         for row in cursor:
@@ -603,11 +608,13 @@ def generate_occupations_json(source_conn, skip_ids, output_path):
     cursor = source_conn.cursor()
 
     # Get distinct polity IDs
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT DISTINCT ic.polity_id
         FROM individuals_cliopatria ic
         WHERE ic.polity_id IS NOT NULL
-    """)
+    """
+    )
 
     polity_ids = set()
     for row in cursor:
@@ -623,12 +630,15 @@ def generate_occupations_json(source_conn, skip_ids, output_path):
     occupations_data = {}
 
     for polity_id in tqdm(polity_ids, desc="Computing occupations"):
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT i.occupations_en
             FROM individuals_cliopatria ic
             JOIN individuals i ON ic.wikidata_id = i.wikidata_id
             WHERE ic.polity_id LIKE ? AND i.occupations_en IS NOT NULL
-        """, (f"%{polity_id}%",))
+        """,
+            (f"%{polity_id}%",),
+        )
 
         occ_counts = defaultdict(int)
         for row in cursor:
@@ -640,7 +650,9 @@ def generate_occupations_json(source_conn, skip_ids, output_path):
 
         if occ_counts:
             # Sort by count descending, take top 20
-            sorted_occs = sorted(occ_counts.items(), key=lambda x: x[1], reverse=True)[:20]
+            sorted_occs = sorted(occ_counts.items(), key=lambda x: x[1], reverse=True)[
+                :20
+            ]
             occupations_data[str(polity_id)] = [
                 {"name": name, "count": count} for name, count in sorted_occs
             ]
@@ -689,7 +701,9 @@ def main():
     # Generate JSON files for frontend
     frontend_public = Path(__file__).parent.parent / "frontend" / "public"
     generate_evolution_json(source_conn, skip_ids, frontend_public / "evolution.json")
-    generate_occupations_json(source_conn, skip_ids, frontend_public / "occupations.json")
+    generate_occupations_json(
+        source_conn, skip_ids, frontend_public / "occupations.json"
+    )
 
     # Close connections
     source_conn.close()

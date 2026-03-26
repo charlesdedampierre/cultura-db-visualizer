@@ -8,6 +8,7 @@ interface SearchResult {
   name: string;
   id: string | number;
   polityId?: number;
+  polityName?: string;
   polityFromYear?: number | null;
   lat: number;
   lon: number;
@@ -80,6 +81,7 @@ export function UnifiedSearch() {
       name: c.name,
       id: c.city_id,
       polityId: c.polity_id,
+      polityName: c.polity_name,
       polityFromYear: c.polity_from_year,
       lat: c.lat,
       lon: c.lon,
@@ -253,6 +255,9 @@ export function UnifiedSearch() {
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-medium text-gray-900">{result.name}</span>
                         <span className="text-xs text-gray-500">({result.count?.toLocaleString()} individuals)</span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {result.polityName} ({formatYear(result.polityFromYear)})
                       </div>
                     </button>
                   ))}
