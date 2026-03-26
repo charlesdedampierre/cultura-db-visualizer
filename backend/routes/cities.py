@@ -57,8 +57,9 @@ def search_cities(
 
     # Search cities by name (case-insensitive partial match)
     # Get more results to account for deduplication and filtering
+    # Include first_individual_year from the cache
     response = db.table("top_cities_cache").select(
-        "city_id, city_name, lat, lon, individual_count, polity_id"
+        "city_id, city_name, lat, lon, individual_count, polity_id, first_individual_year"
     ).ilike("city_name", f"%{q}%").not_.is_("lat", "null").not_.is_("lon", "null").order(
         "individual_count", desc=True
     ).limit(limit * 20).execute()
@@ -95,18 +96,9 @@ def search_cities(
         if pid not in polity_years or (year is not None and (polity_years[pid] is None or year < polity_years[pid])):
             polity_years[pid] = year
 
-    # Deduplicate by city_id with smart polity selection:
-    # 1. Prefer polity whose name contains the city name (e.g., Babylon → Babylonia)
-    # 2. Otherwise, use the polity with the most individuals
+    # Deduplicate by city_id, keeping the polity with the MOST individuals
     city_map: dict[str, dict] = {}
     query_lower = q.lower()
-
-    def city_matches_polity(city_name: str, polity_name: str) -> bool:
-        """Check if city name is related to polity name."""
-        city_lower = city_name.lower()
-        polity_lower = polity_name.lower()
-        # Check if city name is contained in polity name or vice versa
-        return city_lower in polity_lower or polity_lower in city_lower
 
     for row in response.data:
         polity_id = row["polity_id"]
@@ -126,8 +118,8 @@ def search_cities(
         is_exact = name_lower == query_lower
         starts_with = name_lower.startswith(query_lower)
 
-        # Check if city name matches polity name
-        name_matches = city_matches_polity(city_name, polity_name)
+        # Get first_individual_year from cache (when city first appears with an individual)
+        first_individual_year = row.get("first_individual_year") or polity_from_year
 
         if city_id not in city_map:
             # First occurrence of this city with a leaf polity
@@ -140,23 +132,13 @@ def search_cities(
                 "polity_id": polity_id,
                 "polity_name": polity_name,
                 "polity_from_year": polity_from_year,
+                "first_individual_year": first_individual_year,
                 "_is_exact": is_exact,
                 "_starts_with": starts_with,
-                "_name_matches": name_matches,
             }
         else:
-            existing = city_map[city_id]
-            existing_name_matches = existing.get("_name_matches", False)
-
-            # Prefer name match over non-name match
-            # If both match (or both don't), prefer more individuals
-            should_replace = False
-            if name_matches and not existing_name_matches:
-                should_replace = True
-            elif name_matches == existing_name_matches and individual_count > existing["count"]:
-                should_replace = True
-
-            if should_replace:
+            # Keep the polity with more individuals
+            if individual_count > city_map[city_id]["count"]:
                 city_map[city_id] = {
                     "city_id": city_id,
                     "name": city_name,
@@ -166,9 +148,9 @@ def search_cities(
                     "polity_id": polity_id,
                     "polity_name": polity_name,
                     "polity_from_year": polity_from_year,
+                    "first_individual_year": first_individual_year,
                     "_is_exact": is_exact,
                     "_starts_with": starts_with,
-                    "_name_matches": name_matches,
                 }
 
     # Sort: exact matches first, then starts-with, then by count

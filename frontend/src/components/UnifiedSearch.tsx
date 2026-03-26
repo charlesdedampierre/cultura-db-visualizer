@@ -82,7 +82,8 @@ export function UnifiedSearch() {
       id: c.city_id,
       polityId: c.polity_id,
       polityName: c.polity_name,
-      polityFromYear: c.polity_from_year,
+      // Use first_individual_year (when city first appears) instead of polity_from_year
+      polityFromYear: c.first_individual_year ?? c.polity_from_year,
       lat: c.lat,
       lon: c.lon,
       count: c.count,
