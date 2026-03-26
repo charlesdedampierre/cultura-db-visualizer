@@ -130,12 +130,6 @@ export function UnifiedSearch() {
 
   const handleSelectCity = useCallback(
     (result: SearchResult) => {
-      console.log('handleSelectCity called with:', {
-        cityName: result.name,
-        polityId: result.polityId,
-        polityName: result.polityName,
-        polityFromYear: result.polityFromYear,
-      });
       if (result.polityId) {
         setSelectedPolityId(result.polityId);
       }
@@ -258,13 +252,7 @@ export function UnifiedSearch() {
                       onClick={() => handleSelect(result)}
                       className="w-full px-4 py-2 text-left hover:bg-red-50 transition-colors border-b border-gray-100 last:border-b-0"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-gray-900">{result.name}</span>
-                        <span className="text-xs text-gray-500">({result.count?.toLocaleString()} individuals)</span>
-                      </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {result.polityName} ({formatYear(result.polityFromYear)})
-                      </div>
+                      <span className="text-sm font-medium text-gray-900">{result.name}</span>
                     </button>
                   ))}
                 </>
