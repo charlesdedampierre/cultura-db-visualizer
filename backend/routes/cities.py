@@ -49,29 +49,43 @@ def search_cities(
 ):
     """Search cities by name across all polities.
 
-    Returns unique cities, each linked to the earliest polity where the city first appeared.
+    Returns unique cities, each linked to the earliest LEAF polity where the city first appeared.
+    Parent polities (names starting with '(') are excluded - only leaf polities shown on the map.
     Cities with exact name matches are prioritized, then cities containing the query.
     """
     db = get_db()
 
     # Search cities by name (case-insensitive partial match)
-    # Get more results to account for deduplication
+    # Get more results to account for deduplication and filtering
     response = db.table("top_cities_cache").select(
         "city_id, city_name, lat, lon, individual_count, polity_id"
     ).ilike("city_name", f"%{q}%").not_.is_("lat", "null").not_.is_("lon", "null").order(
         "individual_count", desc=True
-    ).limit(limit * 10).execute()
+    ).limit(limit * 20).execute()
 
     if not response.data:
         return {"results": []}
 
-    # Get polity info (from_year) from polity_periods for all polities in results
+    # Get polity info (name, from_year) for all polities in results
     polity_ids = list(set(row["polity_id"] for row in response.data))
+
+    # Get polity names to filter out parent polities (names starting with '(')
+    polities_response = db.table("polities").select(
+        "id, name"
+    ).in_("id", polity_ids).execute()
+
+    # Build a set of leaf polity IDs (names NOT starting with '(')
+    leaf_polity_ids = set()
+    for p in polities_response.data:
+        if p["name"] and not p["name"].startswith("("):
+            leaf_polity_ids.add(p["id"])
+
+    # Get periods for leaf polities only
     periods_response = db.table("polity_periods").select(
         "polity_id, from_year"
-    ).in_("polity_id", polity_ids).execute()
+    ).in_("polity_id", list(leaf_polity_ids)).execute()
 
-    # Get the minimum from_year for each polity
+    # Get the minimum from_year for each leaf polity
     polity_years: dict[int, int | None] = {}
     for p in periods_response.data:
         pid = p["polity_id"]
@@ -79,14 +93,20 @@ def search_cities(
         if pid not in polity_years or (year is not None and (polity_years[pid] is None or year < polity_years[pid])):
             polity_years[pid] = year
 
-    # Deduplicate by city_id, keeping the entry with the earliest polity_from_year
+    # Deduplicate by city_id, keeping the entry with the earliest leaf polity
     city_map: dict[str, dict] = {}
     query_lower = q.lower()
 
     for row in response.data:
+        polity_id = row["polity_id"]
+
+        # Skip parent polities (not leaf)
+        if polity_id not in leaf_polity_ids:
+            continue
+
         city_id = row["city_id"]
         city_name = row["city_name"]
-        polity_from_year = polity_years.get(row["polity_id"])
+        polity_from_year = polity_years.get(polity_id)
 
         # Check if this is an exact match or starts with query
         name_lower = city_name.lower()
@@ -94,20 +114,20 @@ def search_cities(
         starts_with = name_lower.startswith(query_lower)
 
         if city_id not in city_map:
-            # First occurrence of this city
+            # First occurrence of this city with a leaf polity
             city_map[city_id] = {
                 "city_id": city_id,
                 "name": city_name,
                 "lat": row["lat"],
                 "lon": row["lon"],
                 "count": row["individual_count"],
-                "polity_id": row["polity_id"],
+                "polity_id": polity_id,
                 "polity_from_year": polity_from_year,
                 "_is_exact": is_exact,
                 "_starts_with": starts_with,
             }
         else:
-            # Check if this polity is earlier
+            # Check if this leaf polity is earlier
             existing_year = city_map[city_id]["polity_from_year"]
             if polity_from_year is not None and (existing_year is None or polity_from_year < existing_year):
                 city_map[city_id] = {
@@ -116,7 +136,7 @@ def search_cities(
                     "lat": row["lat"],
                     "lon": row["lon"],
                     "count": row["individual_count"],
-                    "polity_id": row["polity_id"],
+                    "polity_id": polity_id,
                     "polity_from_year": polity_from_year,
                     "_is_exact": is_exact,
                     "_starts_with": starts_with,
