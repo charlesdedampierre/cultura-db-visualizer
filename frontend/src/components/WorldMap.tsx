@@ -867,9 +867,11 @@ export function WorldMap() {
               title={dynamicCities ? 'Showing 25-year window' : 'Size cities by current year'}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
+                {/* City dot at the center, with two concentric rings evoking a
+                    time window expanding around it. Outer ring is dashed. */}
+                <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+                <circle cx="12" cy="12" r="5" strokeWidth={1.5} />
+                <circle cx="12" cy="12" r="9" strokeWidth={1.5} strokeDasharray="2 2.5" />
               </svg>
               Dynamic
             </Toggle>

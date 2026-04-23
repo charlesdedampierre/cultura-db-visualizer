@@ -30,7 +30,7 @@ function AboutModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="space-y-3 text-sm text-gray-600 leading-relaxed">
           <p>
-            The <strong>Cultura Visualiser</strong> is an interactive tool for exploring
+            <strong>Our History in Data</strong> is an interactive tool for exploring
             the rise and fall of political entities throughout human history, from ancient
             civilizations to modern states.
           </p>
@@ -47,12 +47,16 @@ function AboutModal({ onClose }: { onClose: () => void }) {
             <h3 className="font-semibold text-gray-900 mb-2">Data Sources</h3>
             <ul className="space-y-1 text-gray-600">
               <li>
-                <a href="https://github.com/charlesdedampierre/cultura" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Cultura Database</a>
+                <a href="https://github.com/charlesdedampierre/cultura_database" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Cultura Database</a>
                 {' '}- Historical figures and cultural data
               </li>
               <li>
                 <a href="https://github.com/Seshat-Global-History-Databank/cliopatria" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Cliopatria Project</a>
                 {' '}- Historical polity boundaries
+              </li>
+              <li>
+                <a href="https://seshat-db.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Seshat Database</a>
+                {' '}- Global history databank
               </li>
               <li>
                 <a href="https://www.wikidata.org" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Wikidata</a>
@@ -142,7 +146,7 @@ function App() {
       <div ref={containerRef} className="h-screen flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-gray-900 text-white px-6 py-3 flex items-center justify-between flex-shrink-0 z-20">
-          <h1 className="text-lg font-semibold tracking-tight">Cultura Visualiser</h1>
+          <h1 className="text-lg font-semibold tracking-tight">Our History in Data</h1>
           <nav className="flex items-center gap-4">
             <UnifiedSearch />
             <button
@@ -198,7 +202,7 @@ function App() {
         <footer className="bg-gray-900 text-gray-400 px-6 py-2 flex items-center justify-center gap-2 text-xs flex-shrink-0">
           <span>© 2026</span>
           <span className="text-gray-600">·</span>
-          <span>Made by <a href="https://bunka.ai" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-white transition-colors">bunka.ai</a></span>
+          <span>Made by <a href="https://bunka.ai" target="_blank" rel="noopener noreferrer" className="text-gray-300 hover:text-white transition-colors">Bunka.ai</a></span>
         </footer>
 
         {/* About modal */}
