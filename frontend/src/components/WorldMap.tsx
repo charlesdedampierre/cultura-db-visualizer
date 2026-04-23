@@ -257,12 +257,14 @@ export function WorldMap() {
   const [isGlobe, setIsGlobe] = useState(true);
   const queryClient = useQueryClient();
 
-  const { selectedYear, selectedPolityId, setSelectedPolityId, flyToLocation, setFlyToLocation, showCities, setShowCities, dynamicCities, setDynamicCities, setCitiesForPolity, mapStyle, setMapStyle, highlightedCity, setHighlightedCity } = useAppStore();
+  const { selectedYear, selectedPolityId, setSelectedPolityId, flyToLocation, setFlyToLocation, showCities, setShowCities, dynamicCities, setDynamicCities, setCitiesForPolity, mapStyle, setMapStyle, highlightedCity, setHighlightedCity, setSelectedCityId } = useAppStore();
 
   const setSelectedPolityIdRef = useRef(setSelectedPolityId);
   setSelectedPolityIdRef.current = setSelectedPolityId;
   const setHighlightedCityRef = useRef(setHighlightedCity);
   setHighlightedCityRef.current = setHighlightedCity;
+  const setSelectedCityIdRef = useRef(setSelectedCityId);
+  setSelectedCityIdRef.current = setSelectedCityId;
 
   // Prefetch cities and individuals data when hovering over a polity
   const prefetchCitiesRef = useRef<(polityId: number) => void>(() => {});
@@ -517,6 +519,28 @@ export function WorldMap() {
         }
       });
 
+      // Clicking a city dot opens the city panel and adds the same gold
+      // pulsing highlight the search bar uses, so the dot is easy to spot.
+      mapInstance.on('click', 'cities-circles', (e) => {
+        if (!e.features || e.features.length === 0) return;
+        e.originalEvent?.stopPropagation?.();
+        const f = e.features[0];
+        const cityId = f.properties?.city_id as string | undefined;
+        if (!cityId) return;
+        setSelectedCityIdRef.current(cityId);
+        const geom = f.geometry as { type: 'Point'; coordinates: [number, number] } | undefined;
+        if (geom?.type === 'Point') {
+          const [lon, lat] = geom.coordinates;
+          setHighlightedCityRef.current({ id: cityId, lat, lon });
+        }
+      });
+      mapInstance.on('mouseenter', 'cities-circles', () => {
+        mapInstance.getCanvas().style.cursor = 'pointer';
+      });
+      mapInstance.on('mouseleave', 'cities-circles', () => {
+        mapInstance.getCanvas().style.cursor = '';
+      });
+
       mapInstance.on('mouseenter', 'polities-fill', (e) => {
         mapInstance.getCanvas().style.cursor = 'pointer';
         // Prefetch cities for hovered polity
@@ -730,6 +754,7 @@ export function WorldMap() {
       return {
         type: 'Feature' as const,
         properties: {
+          city_id: city.city_id,
           name: city.name,
           count: city.count,
           size: normalizedSize, // 1-10 normalized size

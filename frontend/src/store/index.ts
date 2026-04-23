@@ -25,6 +25,10 @@ interface AppState {
   selectedPolityId: number | null;
   setSelectedPolityId: (id: number | null) => void;
 
+  // Selected city (opens the city panel)
+  selectedCityId: string | null;
+  setSelectedCityId: (id: string | null) => void;
+
   // Cities toggle
   showCities: boolean;
   setShowCities: (show: boolean) => void;
@@ -87,10 +91,23 @@ export const useAppStore = create<AppState>((set) => ({
     filterOccupation: null,
   }),
 
-  // Selected polity
+  // Selected polity. Opening a (different) polity closes any open city panel
+  // and resets list filters. Selecting the city panel itself does NOT clear
+  // the current polity — we keep it so city dots stay visible on the map.
   selectedPolityId: null,
-  setSelectedPolityId: (id) => set({
+  setSelectedPolityId: (id) => set((state) => ({
     selectedPolityId: id,
+    selectedCityId: id != null ? null : state.selectedCityId,
+    currentPage: 1,
+    filterYear: null,
+    filterOccupation: null,
+  })),
+
+  // Selected city. Leaves the current polity untouched so the map still
+  // shows that polity's dots under the open city panel.
+  selectedCityId: null,
+  setSelectedCityId: (id) => set({
+    selectedCityId: id,
     currentPage: 1,
     filterYear: null,
     filterOccupation: null,

@@ -1,8 +1,21 @@
 """City-related API endpoints."""
 
+import logging
+from typing import Literal
+
 from fastapi import APIRouter, Query, HTTPException
 from ..database import get_db
-from ..models import PolityTopCities, City
+from ..models import (
+    PolityTopCities,
+    City,
+    CitySummary,
+    CityEvolution,
+    EvolutionPoint,
+    CityIndividual,
+    CityPaginatedIndividuals,
+)
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/cities", tags=["cities"])
@@ -277,6 +290,124 @@ def get_polity_individuals_cities(
             })
 
     return {"polity_id": polity_id, "individuals": individuals}
+
+
+@router.get("/{city_id}/summary", response_model=CitySummary)
+def get_city_summary(city_id: str):
+    """Summary stats for a city page: name, coords, n_individuals and the
+    birth/death/both split."""
+    db = get_db()
+    r = db.table("city_summary_cache").select(
+        "city_id, name_en, lat, lon, n_individuals, n_birth, n_death, n_both"
+    ).eq("city_id", city_id).limit(1).execute()
+    if not r.data:
+        raise HTTPException(status_code=404, detail="City not found")
+    return CitySummary(**r.data[0])
+
+
+@router.get("/{city_id}/evolution", response_model=CityEvolution)
+def get_city_evolution(city_id: str):
+    """Evolution of individual count per 25-year bucket for a city."""
+    db = get_db()
+    # Paginate — could exceed 1000 buckets for very long-lived cities.
+    all_rows: list[dict] = []
+    start = 0
+    page = 1000
+    while True:
+        r = (
+            db.table("city_evolution_cache")
+            .select("year, count")
+            .eq("city_id", city_id)
+            .order("year")
+            .range(start, start + page - 1)
+            .execute()
+        )
+        rows = r.data or []
+        all_rows.extend(rows)
+        if len(rows) < page:
+            break
+        start += page
+    return CityEvolution(
+        city_id=city_id,
+        evolution=[EvolutionPoint(**row) for row in all_rows],
+    )
+
+
+@router.get("/{city_id}/individuals", response_model=CityPaginatedIndividuals)
+def get_city_individuals(
+    city_id: str,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(50, ge=1, le=200, description="Items per page"),
+    sort: Literal["sitelinks_count", "impact_date"] = Query(
+        "sitelinks_count", description="Sort field"
+    ),
+    order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
+    impact_year: int | None = Query(None, description="Filter by 25-year bucket"),
+    occupation: str | None = Query(None, description="Filter by occupation"),
+    name_search: str | None = Query(None, description="Search by name"),
+    link: Literal["birth", "death", "any"] = Query(
+        "any", description="Keep only individuals with this city link"
+    ),
+):
+    """Paginated individuals for a city page with the same filters as the
+    polity individuals endpoint, plus a birth/death link filter."""
+    db = get_db()
+
+    query = db.table("city_individuals_cache").select(
+        "wikidata_id, name_en, occupations_en, sitelinks_count, impact_date, "
+        "impact_date_raw, is_birth, is_death",
+        count="exact",
+    ).eq("city_id", city_id)
+
+    if link == "birth":
+        query = query.eq("is_birth", 1)
+    elif link == "death":
+        query = query.eq("is_death", 1)
+
+    if impact_year is not None:
+        query = query.eq("impact_date", impact_year)
+
+    if name_search is not None and name_search.strip():
+        query = query.ilike("name_en", f"%{name_search.strip()}%")
+
+    if occupation is not None:
+        # Same semi-colon-aware match as /individuals/polity/{polity_id}.
+        query = query.or_(
+            f"occupations_en.eq.{occupation},"
+            f"occupations_en.ilike.{occupation}; %,"
+            f"occupations_en.ilike.%; {occupation}; %,"
+            f"occupations_en.ilike.%; {occupation}"
+        )
+
+    ascending = order == "asc"
+    query = query.order(sort, desc=not ascending)
+    offset = (page - 1) * limit
+    query = query.range(offset, offset + limit - 1)
+
+    resp = query.execute()
+    total = resp.count or 0
+
+    individuals = [
+        CityIndividual(
+            wikidata_id=row["wikidata_id"],
+            name_en=row["name_en"],
+            occupations_en=row["occupations_en"],
+            sitelinks_count=row["sitelinks_count"],
+            impact_date=row["impact_date"],
+            impact_date_raw=row["impact_date_raw"],
+            is_birth=bool(row["is_birth"]),
+            is_death=bool(row["is_death"]),
+        )
+        for row in resp.data or []
+    ]
+
+    return CityPaginatedIndividuals(
+        city_id=city_id,
+        total=total,
+        page=page,
+        limit=limit,
+        individuals=individuals,
+    )
 
 
 @router.get("/{city_id}")

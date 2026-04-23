@@ -48,7 +48,7 @@ export function UnifiedSearch() {
   const [isOpen, setIsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { setSelectedPolityId, setFlyToLocation, setSelectedYear, setShowCities, setHighlightedCity } = useAppStore();
+  const { setSelectedPolityId, setSelectedCityId, setFlyToLocation, setSelectedYear, setShowCities, setHighlightedCity } = useAppStore();
 
   const debouncedQuery = useDebounce(query, 300);
 
@@ -163,10 +163,13 @@ export function UnifiedSearch() {
         zoom: 8,
       });
       setHighlightedCity({ id: result.id as string, lat: result.lat, lon: result.lon });
+      // Open the city panel. Polity stays selected (from above) so dots
+      // remain visible on the map underneath the panel.
+      setSelectedCityId(result.id as string);
       setQuery('');
       setIsOpen(false);
     },
-    [setSelectedPolityId, setFlyToLocation, setShowCities, setSelectedYear, setHighlightedCity]
+    [setSelectedPolityId, setSelectedCityId, setFlyToLocation, setShowCities, setSelectedYear, setHighlightedCity]
   );
 
   const handleSelect = useCallback(

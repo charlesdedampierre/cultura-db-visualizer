@@ -97,3 +97,66 @@ export interface CitySearchResult {
 export async function searchCities(query: string, limit = 20): Promise<{ results: CitySearchResult[] }> {
   return fetchJson<{ results: CitySearchResult[] }>(`${API_BASE}/cities/search?q=${encodeURIComponent(query)}&limit=${limit}`);
 }
+
+// City detail endpoints (for the city panel)
+
+export interface CitySummary {
+  city_id: string;
+  name_en: string | null;
+  lat: number | null;
+  lon: number | null;
+  n_individuals: number;
+  n_birth: number;
+  n_death: number;
+  n_both: number;
+}
+
+export interface CityEvolution {
+  city_id: string;
+  evolution: Array<{ year: number; count: number }>;
+}
+
+export interface CityIndividual {
+  wikidata_id: string;
+  name_en: string | null;
+  occupations_en: string | null;
+  sitelinks_count: number | null;
+  impact_date: number | null;
+  impact_date_raw: number | null;
+  is_birth: boolean;
+  is_death: boolean;
+}
+
+export interface CityPaginatedIndividuals {
+  city_id: string;
+  total: number;
+  page: number;
+  limit: number;
+  individuals: CityIndividual[];
+}
+
+export async function getCitySummary(cityId: string): Promise<CitySummary> {
+  return fetchJson<CitySummary>(`${API_BASE}/cities/${encodeURIComponent(cityId)}/summary`);
+}
+
+export async function getCityEvolution(cityId: string): Promise<CityEvolution> {
+  return fetchJson<CityEvolution>(`${API_BASE}/cities/${encodeURIComponent(cityId)}/evolution`);
+}
+
+export async function getCityIndividuals(
+  cityId: string,
+  page: number,
+  limit: number,
+  sort: 'sitelinks_count' | 'impact_date',
+  order: 'asc' | 'desc',
+  impactYear?: number | null,
+  occupation?: string | null,
+  nameSearch?: string | null,
+  link: 'birth' | 'death' | 'any' = 'any',
+): Promise<CityPaginatedIndividuals> {
+  let url = `${API_BASE}/cities/${encodeURIComponent(cityId)}/individuals?page=${page}&limit=${limit}&sort=${sort}&order=${order}&link=${link}`;
+  if (impactYear != null) url += `&impact_year=${impactYear}`;
+  if (occupation) url += `&occupation=${encodeURIComponent(occupation)}`;
+  if (nameSearch) url += `&name_search=${encodeURIComponent(nameSearch)}`;
+  return fetchJson<CityPaginatedIndividuals>(url);
+}

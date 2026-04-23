@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TimelineSlider } from './components/TimelineSlider';
 import { WorldMap } from './components/WorldMap';
 import { PolityPanel } from './components/PolityPanel';
+import { CityPanel } from './components/CityPanel';
 import { UnifiedSearch } from './components/UnifiedSearch';
 import { useAppStore } from './store';
 
@@ -72,7 +73,9 @@ function AboutModal({ onClose }: { onClose: () => void }) {
 
 function App() {
   const [showAbout, setShowAbout] = useState(false);
-  const { selectedPolityId } = useAppStore();
+  const { selectedPolityId, selectedCityId, setSelectedCityId } = useAppStore();
+  // Either a polity or a city triggers the bottom panel.
+  const hasSelection = selectedPolityId != null || selectedCityId != null;
 
   // Track panel visibility with delayed unmount for smooth animation
   const [isPanelVisible, setIsPanelVisible] = useState(false);
@@ -84,8 +87,8 @@ function App() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (selectedPolityId) {
-      // Reset height to default when selecting a new polity
+    if (hasSelection) {
+      // Reset height to default when selecting a new polity or city
       setMapHeightPercent(55);
 
       // Opening: render immediately, then show
@@ -103,7 +106,7 @@ function App() {
       }, 300); // Match transition duration
       return () => clearTimeout(timer);
     }
-  }, [selectedPolityId]);
+  }, [hasSelection]);
 
   // Handle drag to resize panel
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -185,7 +188,10 @@ function App() {
           {/* Drag handle - drag to resize, click to collapse */}
           <div
             onMouseDown={handleMouseDown}
-            onDoubleClick={() => useAppStore.getState().setSelectedPolityId(null)}
+            onDoubleClick={() => {
+              useAppStore.getState().setSelectedPolityId(null);
+              setSelectedCityId(null);
+            }}
             className={`absolute left-0 right-0 top-0 z-10 h-4 flex items-center justify-center cursor-ns-resize group ${
               isDragging ? 'bg-gray-200' : 'hover:bg-gray-200/50'
             } transition-colors`}
@@ -195,7 +201,7 @@ function App() {
               isDragging ? 'bg-gray-500' : 'bg-gray-300 group-hover:bg-gray-400'
             }`} />
           </div>
-          {shouldRenderPanel && <PolityPanel />}
+          {shouldRenderPanel && (selectedCityId != null ? <CityPanel /> : <PolityPanel />)}
         </div>
 
         {/* Footer */}

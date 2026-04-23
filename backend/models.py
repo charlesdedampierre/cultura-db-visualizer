@@ -88,3 +88,36 @@ class ActivePolitiesResponse(BaseModel):
     """Response for active polities at a year."""
     year: int
     polities: list[PolityWithGeometry]
+
+
+class CityIndividual(Individual):
+    """Individual as linked to a city — adds birth/death flags."""
+    is_birth: bool
+    is_death: bool
+
+
+class CityPaginatedIndividuals(BaseModel):
+    """Paginated list of individuals for a city."""
+    city_id: str
+    total: int
+    page: int
+    limit: int
+    individuals: list[CityIndividual]
+
+
+class CitySummary(BaseModel):
+    """Aggregate stats for a city page."""
+    city_id: str
+    name_en: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    n_individuals: int
+    n_birth: int
+    n_death: int
+    n_both: int
+
+
+class CityEvolution(BaseModel):
+    """Per-city evolution over time (25-year buckets)."""
+    city_id: str
+    evolution: list[EvolutionPoint]
