@@ -39,7 +39,11 @@ def get_polity_individuals(
     ).eq("polity_id", polity_id).not_.is_("impact_date", "null")
 
     if impact_year is not None:
-        query = query.eq("impact_date_raw", impact_year)
+        # The evolution chart plots 25-year buckets (floor_to_25). `impact_date`
+        # stores that bucket; `impact_date_raw` is the exact year. Filter on
+        # the bucket so clicking a point returns every individual in the
+        # [impact_year, impact_year + 24] window.
+        query = query.eq("impact_date", impact_year)
 
     if name_search is not None and name_search.strip():
         query = query.ilike("name_en", f"%{name_search.strip()}%")

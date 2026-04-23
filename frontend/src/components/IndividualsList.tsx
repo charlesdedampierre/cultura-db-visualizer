@@ -38,6 +38,7 @@ export function IndividualsList() {
     filterOccupation,
     setFilterOccupation,
     filterYear,
+    setFilterYear,
     setIndividualsCount,
   } = useAppStore();
 
@@ -126,17 +127,30 @@ export function IndividualsList() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Active filter indicator */}
-      {filterOccupation && (
-        <div className="mb-2 flex items-center gap-2 flex-shrink-0">
+      {/* Active filter indicators */}
+      {(filterOccupation || filterYear != null) && (
+        <div className="mb-2 flex items-center gap-2 flex-shrink-0 flex-wrap">
           <span className="text-xs text-gray-500">Filtered by:</span>
-          <Badge
-            variant="secondary"
-            className="cursor-pointer hover:bg-gray-200"
-            onClick={() => setFilterOccupation(null)}
-          >
-            {filterOccupation} <X className="ml-1 h-3 w-3" />
-          </Badge>
+          {filterYear != null && (
+            <Badge
+              variant="secondary"
+              className="cursor-pointer hover:bg-gray-200"
+              onClick={() => setFilterYear(null)}
+              title="Click to clear year filter"
+            >
+              {formatYear(filterYear)}–{formatYear(filterYear + 24)} <X className="ml-1 h-3 w-3" />
+            </Badge>
+          )}
+          {filterOccupation && (
+            <Badge
+              variant="secondary"
+              className="cursor-pointer hover:bg-gray-200"
+              onClick={() => setFilterOccupation(null)}
+              title="Click to clear occupation filter"
+            >
+              {filterOccupation} <X className="ml-1 h-3 w-3" />
+            </Badge>
+          )}
         </div>
       )}
 
