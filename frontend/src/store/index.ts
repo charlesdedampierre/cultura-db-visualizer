@@ -92,26 +92,30 @@ export const useAppStore = create<AppState>((set) => ({
   }),
 
   // Selected polity. Opening a (different) polity closes any open city panel
-  // and resets list filters. Selecting the city panel itself does NOT clear
-  // the current polity — we keep it so city dots stay visible on the map.
+  // and resets list filters. On open we pre-seed filterYear to the main
+  // timeline's 25-year bucket so both charts + list land focused on the
+  // period the user is viewing, matching the city-panel behaviour.
   selectedPolityId: null,
   setSelectedPolityId: (id) => set((state) => ({
     selectedPolityId: id,
     selectedCityId: id != null ? null : state.selectedCityId,
     currentPage: 1,
-    filterYear: null,
+    filterYear: id != null ? Math.floor(state.selectedYear / 25) * 25 : null,
     filterOccupation: null,
   })),
 
   // Selected city. Leaves the current polity untouched so the map still
-  // shows that polity's dots under the open city panel.
+  // shows that polity's dots under the open city panel. When opening a
+  // city, we pre-seed filterYear to the main timeline's year (floored to
+  // the 25-year evolution bucket) so the city panel lands already focused
+  // on the period the user is viewing.
   selectedCityId: null,
-  setSelectedCityId: (id) => set({
+  setSelectedCityId: (id) => set((state) => ({
     selectedCityId: id,
     currentPage: 1,
-    filterYear: null,
+    filterYear: id != null ? Math.floor(state.selectedYear / 25) * 25 : null,
     filterOccupation: null,
-  }),
+  })),
 
   // Cities toggle
   showCities: false,
