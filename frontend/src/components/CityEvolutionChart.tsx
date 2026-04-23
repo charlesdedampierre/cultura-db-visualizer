@@ -54,7 +54,18 @@ export function CityEvolutionChart() {
           style={{ cursor: 'pointer' }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis dataKey="year" tickFormatter={(y) => formatYear(y)} tick={{ fontSize: 11 }} stroke="#9ca3af" />
+          {/* Numeric X axis so the ReferenceLine can render at any year —
+              even one that isn't exactly a bucket present in this city's
+              evolution data (e.g. main timeline at 200 CE while the city's
+              chart only has data from 1500 onward). */}
+          <XAxis
+            dataKey="year"
+            type="number"
+            domain={['dataMin', 'dataMax']}
+            tickFormatter={(y) => formatYear(y)}
+            tick={{ fontSize: 11 }}
+            stroke="#9ca3af"
+          />
           <YAxis tickFormatter={(v) => v.toLocaleString()} tick={{ fontSize: 11 }} stroke="#9ca3af">
             <Label
               value="Individuals"

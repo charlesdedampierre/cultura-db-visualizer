@@ -59,11 +59,6 @@ export function CityPanel() {
               <span className="text-sm text-gray-500">
                 {summary.n_individuals.toLocaleString()} individual{summary.n_individuals === 1 ? '' : 's'}
               </span>
-              <span className="text-xs text-gray-400">
-                · {summary.n_birth.toLocaleString()} born
-                · {summary.n_death.toLocaleString()} died
-                {summary.n_both > 0 && ` · ${summary.n_both.toLocaleString()} both`}
-              </span>
               <a
                 href={`https://www.wikidata.org/wiki/${selectedCityId}`}
                 target="_blank"
