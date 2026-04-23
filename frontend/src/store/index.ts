@@ -29,6 +29,14 @@ interface AppState {
   showCities: boolean;
   setShowCities: (show: boolean) => void;
 
+  // Dynamic cities toggle (size by year)
+  dynamicCities: boolean;
+  setDynamicCities: (dynamic: boolean) => void;
+
+  // Map style
+  mapStyle: 'light' | 'terrain' | 'satellite';
+  setMapStyle: (style: 'light' | 'terrain' | 'satellite') => void;
+
   // Cities cache (per polity)
   citiesCache: CitiesCache;
   setCitiesForPolity: (polityId: number, cities: CityFromAPI[]) => void;
@@ -37,6 +45,10 @@ interface AppState {
   // Fly to location
   flyToLocation: { lng: number; lat: number; zoom?: number } | null;
   setFlyToLocation: (location: { lng: number; lat: number; zoom?: number } | null) => void;
+
+  // Highlighted city (from search) — renders a pulsing marker on the map
+  highlightedCity: { id: string; lat: number; lon: number } | null;
+  setHighlightedCity: (city: { id: string; lat: number; lon: number } | null) => void;
 
   // Individuals sorting
   sortField: 'sitelinks_count' | 'impact_date';
@@ -88,6 +100,14 @@ export const useAppStore = create<AppState>((set) => ({
   showCities: false,
   setShowCities: (show) => set({ showCities: show }),
 
+  // Dynamic cities toggle
+  dynamicCities: false,
+  setDynamicCities: (dynamic) => set({ dynamicCities: dynamic }),
+
+  // Map style
+  mapStyle: 'light',
+  setMapStyle: (style) => set({ mapStyle: style }),
+
   // Cities cache
   citiesCache: {},
   setCitiesForPolity: (polityId, cities) => set((state) => ({
@@ -101,6 +121,10 @@ export const useAppStore = create<AppState>((set) => ({
   // Fly to location
   flyToLocation: null,
   setFlyToLocation: (location) => set({ flyToLocation: location }),
+
+  // Highlighted city
+  highlightedCity: null,
+  setHighlightedCity: (city) => set({ highlightedCity: city }),
 
   // Individuals sorting
   sortField: 'sitelinks_count',

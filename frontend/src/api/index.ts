@@ -39,8 +39,21 @@ export async function getPolityEvolution(polityId: number): Promise<PolityEvolut
 }
 
 // Get top cities for a polity
-export async function getPolityTopCities(polityId: number, limit = 100): Promise<PolityTopCities> {
+export async function getPolityTopCities(polityId: number, limit = 500): Promise<PolityTopCities> {
   return fetchJson<PolityTopCities>(`${API_BASE}/cities/polity/${polityId}?limit=${limit}`);
+}
+
+// Get individuals with cities for client-side dynamic computation
+export interface IndividualsCitiesResponse {
+  polity_id: number;
+  individuals: Array<{
+    c: string;  // city_id
+    y: number;  // impact year
+  }>;
+}
+
+export async function getPolityIndividualsCities(polityId: number): Promise<IndividualsCitiesResponse> {
+  return fetchJson<IndividualsCitiesResponse>(`${API_BASE}/cities/polity/${polityId}/individuals-cities`);
 }
 
 // Get individuals for a polity
@@ -74,7 +87,11 @@ export interface CitySearchResult {
   lon: number;
   count: number;
   polity_id: number;
+  polity_name: string;
   polity_from_year: number | null;
+  polity_to_year: number | null;
+  first_individual_year: number | null;
+  peak_year: number | null;
 }
 
 export async function searchCities(query: string, limit = 20): Promise<{ results: CitySearchResult[] }> {

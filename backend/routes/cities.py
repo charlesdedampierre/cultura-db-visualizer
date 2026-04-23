@@ -11,7 +11,8 @@ router = APIRouter(prefix="/cities", tags=["cities"])
 @router.get("/polity/{polity_id}", response_model=PolityTopCities)
 def get_polity_top_cities(
     polity_id: int,
-    limit: int = Query(100, ge=1, le=500, description="Number of cities to return"),
+    limit: int = Query(500, ge=1, le=5000, description="Number of cities to return"),
+    min_count: int = Query(1, ge=1, description="Minimum individual count to include"),
 ):
     """Get top cities by individual count for a polity."""
     db = get_db()
@@ -21,10 +22,12 @@ def get_polity_top_cities(
     if not polity_check.data:
         raise HTTPException(status_code=404, detail="Polity not found")
 
-    # Get top cities from cache (filter out NULL lat/lon)
+    # Get top cities from cache (filter out NULL lat/lon and below min_count)
     response = db.table("top_cities_cache").select(
         "city_id, city_name, lat, lon, individual_count"
-    ).eq("polity_id", polity_id).not_.is_("lat", "null").not_.is_("lon", "null").order(
+    ).eq("polity_id", polity_id).gte(
+        "individual_count", min_count
+    ).not_.is_("lat", "null").not_.is_("lon", "null").order(
         "individual_count", desc=True
     ).limit(limit).execute()
 
@@ -42,6 +45,77 @@ def get_polity_top_cities(
     return PolityTopCities(polity_id=polity_id, cities=cities)
 
 
+@router.get("/polity/{polity_id}/dynamic")
+def get_polity_cities_dynamic(
+    polity_id: int,
+    year: int = Query(..., description="Center year for the 25-year window"),
+    limit: int = Query(200, ge=1, le=1000, description="Maximum cities to return"),
+):
+    """Get cities with individual counts for a specific 25-year window.
+
+    Counts individuals whose impact_date falls within [year-12, year+12].
+    This allows visualizing how the "center of gravity" shifts over time.
+    """
+    db = get_db()
+
+    # Define the 25-year window
+    year_start = year - 12
+    year_end = year + 12
+
+    # Get individuals in this polity within the year range
+    # Only select city IDs (minimal data transfer)
+    individuals = db.table("individuals_light").select(
+        "birthcity_id, deathcity_id"
+    ).eq("polity_id", polity_id).gte(
+        "impact_date_raw", year_start
+    ).lte(
+        "impact_date_raw", year_end
+    ).limit(10000).execute()  # Cap at 10k individuals for performance
+
+    if not individuals.data:
+        return {"polity_id": polity_id, "year": year, "cities": []}
+
+    # Count individuals per city (birth city priority, death city fallback)
+    city_counts: dict[str, int] = {}
+    for ind in individuals.data:
+        # Use birth city if available, otherwise death city
+        city_id = ind.get("birthcity_id") or ind.get("deathcity_id")
+        if city_id:
+            city_counts[city_id] = city_counts.get(city_id, 0) + 1
+
+    if not city_counts:
+        return {"polity_id": polity_id, "year": year, "cities": []}
+
+    # Sort by count and take top cities
+    top_city_ids = sorted(city_counts.keys(), key=lambda x: -city_counts[x])[:limit]
+
+    # Get city details (coordinates, names) only for top cities.
+    # Filter to urban settlements — non-urban places (parishes, minor localities,
+    # etc.) should not appear on the map.
+    cities_response = db.table("cities").select(
+        "id, name_en, lat, lon"
+    ).in_("id", top_city_ids).eq("is_urban_settlement", True).not_.is_(
+        "lat", "null"
+    ).not_.is_("lon", "null").execute()
+
+    # Build result
+    cities = []
+    for city in cities_response.data:
+        city_id = city["id"]
+        cities.append({
+            "city_id": city_id,
+            "name": city["name_en"],
+            "lat": city["lat"],
+            "lon": city["lon"],
+            "count": city_counts.get(city_id, 0),
+        })
+
+    # Sort by count descending
+    cities.sort(key=lambda x: -x["count"])
+
+    return {"polity_id": polity_id, "year": year, "cities": cities}
+
+
 @router.get("/search")
 def search_cities(
     q: str = Query(..., min_length=2, description="Search query"),
@@ -57,9 +131,8 @@ def search_cities(
 
     # Search cities by name (case-insensitive partial match)
     # Get more results to account for deduplication and filtering
-    # Include first_individual_year from the cache
     response = db.table("top_cities_cache").select(
-        "city_id, city_name, lat, lon, individual_count, polity_id, first_individual_year"
+        "city_id, city_name, lat, lon, individual_count, polity_id, first_individual_year, peak_year"
     ).ilike("city_name", f"%{q}%").not_.is_("lat", "null").not_.is_("lon", "null").order(
         "individual_count", desc=True
     ).limit(limit * 20).execute()
@@ -85,16 +158,24 @@ def search_cities(
 
     # Get periods for leaf polities only
     periods_response = db.table("polity_periods").select(
-        "polity_id, from_year"
+        "polity_id, from_year, to_year"
     ).in_("polity_id", list(leaf_polity_ids)).execute()
 
-    # Get the minimum from_year for each leaf polity
-    polity_years: dict[int, int | None] = {}
+    # Aggregate: min(from_year) and max(to_year) per leaf polity
+    polity_from_years: dict[int, int | None] = {}
+    polity_to_years: dict[int, int | None] = {}
     for p in periods_response.data:
         pid = p["polity_id"]
-        year = p["from_year"]
-        if pid not in polity_years or (year is not None and (polity_years[pid] is None or year < polity_years[pid])):
-            polity_years[pid] = year
+        fy = p["from_year"]
+        ty = p["to_year"]
+        if fy is not None:
+            cur = polity_from_years.get(pid)
+            if cur is None or fy < cur:
+                polity_from_years[pid] = fy
+        if ty is not None:
+            cur = polity_to_years.get(pid)
+            if cur is None or ty > cur:
+                polity_to_years[pid] = ty
 
     # Deduplicate by city_id, keeping the polity with the MOST individuals
     city_map: dict[str, dict] = {}
@@ -110,7 +191,8 @@ def search_cities(
         city_id = row["city_id"]
         city_name = row["city_name"]
         individual_count = row["individual_count"]
-        polity_from_year = polity_years.get(polity_id)
+        polity_from_year = polity_from_years.get(polity_id)
+        polity_to_year = polity_to_years.get(polity_id)
         polity_name = polity_names.get(polity_id, "Unknown")
 
         # Check if this is an exact match or starts with query
@@ -120,38 +202,30 @@ def search_cities(
 
         # Get first_individual_year from cache (when city first appears with an individual)
         first_individual_year = row.get("first_individual_year") or polity_from_year
+        # peak_year = year where this city has the most individuals (25-year window)
+        peak_year = row.get("peak_year")
+
+        entry = {
+            "city_id": city_id,
+            "name": city_name,
+            "lat": row["lat"],
+            "lon": row["lon"],
+            "count": individual_count,
+            "polity_id": polity_id,
+            "polity_name": polity_name,
+            "polity_from_year": polity_from_year,
+            "polity_to_year": polity_to_year,
+            "first_individual_year": first_individual_year,
+            "peak_year": peak_year,
+            "_is_exact": is_exact,
+            "_starts_with": starts_with,
+        }
 
         if city_id not in city_map:
-            # First occurrence of this city with a leaf polity
-            city_map[city_id] = {
-                "city_id": city_id,
-                "name": city_name,
-                "lat": row["lat"],
-                "lon": row["lon"],
-                "count": individual_count,
-                "polity_id": polity_id,
-                "polity_name": polity_name,
-                "polity_from_year": polity_from_year,
-                "first_individual_year": first_individual_year,
-                "_is_exact": is_exact,
-                "_starts_with": starts_with,
-            }
-        else:
+            city_map[city_id] = entry
+        elif individual_count > city_map[city_id]["count"]:
             # Keep the polity with more individuals
-            if individual_count > city_map[city_id]["count"]:
-                city_map[city_id] = {
-                    "city_id": city_id,
-                    "name": city_name,
-                    "lat": row["lat"],
-                    "lon": row["lon"],
-                    "count": individual_count,
-                    "polity_id": polity_id,
-                    "polity_name": polity_name,
-                    "polity_from_year": polity_from_year,
-                    "first_individual_year": first_individual_year,
-                    "_is_exact": is_exact,
-                    "_starts_with": starts_with,
-                }
+            city_map[city_id] = entry
 
     # Sort: exact matches first, then starts-with, then by count
     def sort_key(x):
@@ -170,6 +244,39 @@ def search_cities(
     ]
 
     return {"results": results}
+
+
+@router.get("/polity/{polity_id}/individuals-cities")
+def get_polity_individuals_cities(
+    polity_id: int,
+):
+    """Get all individuals with their city and impact year for client-side dynamic computation.
+
+    Returns minimal data needed to compute dynamic city counts on the frontend.
+    """
+    db = get_db()
+
+    # Get all individuals for this polity with city info
+    response = db.table("individuals_light").select(
+        "birthcity_id, deathcity_id, impact_date_raw"
+    ).eq("polity_id", polity_id).not_.is_(
+        "impact_date_raw", "null"
+    ).execute()
+
+    if not response.data:
+        return {"polity_id": polity_id, "individuals": []}
+
+    # Simplify: just return city_id (birth or death) and year
+    individuals = []
+    for ind in response.data:
+        city_id = ind.get("birthcity_id") or ind.get("deathcity_id")
+        if city_id and ind.get("impact_date_raw") is not None:
+            individuals.append({
+                "c": city_id,  # city_id (short key for smaller payload)
+                "y": ind["impact_date_raw"],  # year
+            })
+
+    return {"polity_id": polity_id, "individuals": individuals}
 
 
 @router.get("/{city_id}")

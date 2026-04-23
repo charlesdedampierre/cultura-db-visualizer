@@ -36,7 +36,8 @@ def main():
 
     for city_id, polity_id in tqdm(pairs):
         # Get earliest individual from this city in this polity
-        earliest = db.table("individuals_light").select(
+        # Check both birth city and death city (for individuals without birth city)
+        earliest_birth = db.table("individuals_light").select(
             "impact_date_raw"
         ).eq("polity_id", polity_id).eq(
             "birthcity_id", city_id
@@ -44,8 +45,25 @@ def main():
             "impact_date_raw"
         ).limit(1).execute()
 
-        if earliest.data:
-            first_year = earliest.data[0]["impact_date_raw"]
+        earliest_death = db.table("individuals_light").select(
+            "impact_date_raw"
+        ).eq("polity_id", polity_id).eq(
+            "deathcity_id", city_id
+        ).is_("birthcity_id", "null").not_.is_(  # Only count if no birth city
+            "impact_date_raw", "null"
+        ).order(
+            "impact_date_raw"
+        ).limit(1).execute()
+
+        # Find the earliest year from either source
+        years = []
+        if earliest_birth.data:
+            years.append(earliest_birth.data[0]["impact_date_raw"])
+        if earliest_death.data:
+            years.append(earliest_death.data[0]["impact_date_raw"])
+
+        if years:
+            first_year = min(years)
             updates.append({
                 "city_id": city_id,
                 "polity_id": polity_id,

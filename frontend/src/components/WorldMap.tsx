@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '../store';
-import { getActivePolities, getPolityTopCities } from '../api';
+import { getActivePolities, getPolityTopCities, getPolityIndividualsCities } from '../api';
 import type { PolityWithGeometry } from '../types';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Toggle } from '@/components/ui/toggle';
 
 const POLITY_COLORS = [
   '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
@@ -122,34 +124,130 @@ function calculateCentroid(geometry: GeoJSON.Geometry): [number, number] | null 
   return null;
 }
 
-const MAP_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    'carto-light': {
-      type: 'raster',
-      tiles: [
-        'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-        'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-        'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-      ],
-      tileSize: 256,
-      attribution: '',
+const MAP_STYLES: Record<'light' | 'terrain' | 'satellite', maplibregl.StyleSpecification> = {
+  light: {
+    version: 8,
+    sources: {
+      'carto-light': {
+        type: 'raster',
+        tiles: [
+          'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+          'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+          'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+        ],
+        tileSize: 256,
+        attribution: '',
+      },
     },
+    layers: [
+      {
+        id: 'background',
+        type: 'background',
+        paint: { 'background-color': '#e8e8e8' },
+      },
+      {
+        id: 'carto-light-layer',
+        type: 'raster',
+        source: 'carto-light',
+        minzoom: 0,
+        maxzoom: 22,
+      },
+    ],
   },
-  layers: [
-    {
-      id: 'background',
-      type: 'background',
-      paint: { 'background-color': '#e8e8e8' },
+  terrain: {
+    version: 8,
+    sources: {
+      'stamen-terrain': {
+        type: 'raster',
+        tiles: [
+          'https://tiles.stadiamaps.com/tiles/stamen_terrain_background/{z}/{x}/{y}.png',
+        ],
+        tileSize: 256,
+        attribution: '',
+      },
+      'carto-labels': {
+        type: 'raster',
+        tiles: [
+          'https://a.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png',
+          'https://b.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png',
+          'https://c.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}@2x.png',
+        ],
+        tileSize: 256,
+        attribution: '',
+      },
     },
-    {
-      id: 'carto-light-layer',
-      type: 'raster',
-      source: 'carto-light',
-      minzoom: 0,
-      maxzoom: 22,
+    layers: [
+      {
+        id: 'background',
+        type: 'background',
+        paint: { 'background-color': '#f5f3f0' },
+      },
+      {
+        id: 'stamen-terrain-layer',
+        type: 'raster',
+        source: 'stamen-terrain',
+        minzoom: 0,
+        maxzoom: 18,
+      },
+      {
+        id: 'carto-labels-layer',
+        type: 'raster',
+        source: 'carto-labels',
+        minzoom: 0,
+        maxzoom: 22,
+        paint: {
+          'raster-opacity': 0.7,
+        },
+      },
+    ],
+  },
+  satellite: {
+    version: 8,
+    sources: {
+      'esri-satellite': {
+        type: 'raster',
+        tiles: [
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        ],
+        tileSize: 256,
+        attribution: '',
+      },
+      'carto-labels-dark': {
+        type: 'raster',
+        tiles: [
+          'https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
+          'https://b.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
+          'https://c.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png',
+        ],
+        tileSize: 256,
+        attribution: '',
+      },
     },
-  ],
+    layers: [
+      {
+        id: 'background',
+        type: 'background',
+        paint: { 'background-color': '#1a1a2e' },
+      },
+      {
+        id: 'esri-satellite-layer',
+        type: 'raster',
+        source: 'esri-satellite',
+        minzoom: 0,
+        maxzoom: 19,
+      },
+      {
+        id: 'carto-labels-dark-layer',
+        type: 'raster',
+        source: 'carto-labels-dark',
+        minzoom: 0,
+        maxzoom: 22,
+        paint: {
+          'raster-opacity': 0.9,
+        },
+      },
+    ],
+  },
 };
 
 export function WorldMap() {
@@ -157,20 +255,84 @@ export function WorldMap() {
   const map = useRef<maplibregl.Map | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [isGlobe, setIsGlobe] = useState(true);
+  const queryClient = useQueryClient();
 
-  const { selectedYear, selectedPolityId, setSelectedPolityId, flyToLocation, setFlyToLocation, showCities, setShowCities, setCitiesForPolity } = useAppStore();
+  const { selectedYear, selectedPolityId, setSelectedPolityId, flyToLocation, setFlyToLocation, showCities, setShowCities, dynamicCities, setDynamicCities, setCitiesForPolity, mapStyle, setMapStyle, highlightedCity, setHighlightedCity } = useAppStore();
 
   const setSelectedPolityIdRef = useRef(setSelectedPolityId);
   setSelectedPolityIdRef.current = setSelectedPolityId;
+  const setHighlightedCityRef = useRef(setHighlightedCity);
+  setHighlightedCityRef.current = setHighlightedCity;
+
+  // Prefetch cities and individuals data when hovering over a polity
+  const prefetchCitiesRef = useRef<(polityId: number) => void>(() => {});
+  prefetchCitiesRef.current = useCallback((polityId: number) => {
+    // Prefetch static cities
+    queryClient.prefetchQuery({
+      queryKey: ['polityTopCities', polityId],
+      queryFn: () => getPolityTopCities(polityId),
+      staleTime: Infinity,
+    });
+    // Prefetch individuals data for dynamic mode
+    queryClient.prefetchQuery({
+      queryKey: ['polityIndividualsCities', polityId],
+      queryFn: () => getPolityIndividualsCities(polityId),
+      staleTime: Infinity,
+    });
+  }, [queryClient]);
 
   // Fetch cities for selected polity (prefetch in background when polity is selected)
   const { data: citiesData } = useQuery({
     queryKey: ['polityTopCities', selectedPolityId],
-    queryFn: () => getPolityTopCities(selectedPolityId!, 100),
+    queryFn: () => getPolityTopCities(selectedPolityId!),
     enabled: !!selectedPolityId, // Only fetch when a polity is selected
     staleTime: Infinity, // Cache forever during session
     gcTime: Infinity, // Keep in cache
   });
+
+  // Fetch individuals-cities data for client-side dynamic computation
+  const { data: individualsCitiesData } = useQuery({
+    queryKey: ['polityIndividualsCities', selectedPolityId],
+    queryFn: () => getPolityIndividualsCities(selectedPolityId!),
+    enabled: !!selectedPolityId, // Prefetch when polity is selected
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
+  // Compute dynamic cities client-side (instant, no network request)
+  const dynamicCitiesComputed = useMemo(() => {
+    if (!dynamicCities || !individualsCitiesData || !citiesData) return null;
+
+    const yearStart = selectedYear - 12;
+    const yearEnd = selectedYear + 12;
+
+    // Count individuals per city in the year range
+    const cityCounts: Record<string, number> = {};
+    for (const ind of individualsCitiesData.individuals) {
+      if (ind.y >= yearStart && ind.y <= yearEnd) {
+        cityCounts[ind.c] = (cityCounts[ind.c] || 0) + 1;
+      }
+    }
+
+    // Map to city objects with coordinates (from static cities data)
+    const cityMap = new Map(citiesData.cities.map(c => [c.city_id, c]));
+    const cities = Object.entries(cityCounts)
+      .map(([cityId, count]) => {
+        const cityInfo = cityMap.get(cityId);
+        if (!cityInfo) return null;
+        return {
+          city_id: cityId,
+          name: cityInfo.name,
+          lat: cityInfo.lat,
+          lon: cityInfo.lon,
+          count,
+        };
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== null)
+      .sort((a, b) => b.count - a.count);
+
+    return { cities };
+  }, [dynamicCities, individualsCitiesData, citiesData, selectedYear]);
 
   // Cache cities when they arrive
   useEffect(() => {
@@ -193,7 +355,7 @@ export function WorldMap() {
 
     const mapInstance = new maplibregl.Map({
       container: mapContainer.current,
-      style: MAP_STYLE,
+      style: MAP_STYLES.light,
       center: [15, 42], // Centered on Roman Empire (Mediterranean)
       zoom: 3,
       attributionControl: false,
@@ -350,12 +512,20 @@ export function WorldMap() {
           const polityId = e.features[0].properties?.id;
           if (polityId) {
             setSelectedPolityIdRef.current(polityId);
+            setHighlightedCityRef.current(null);
           }
         }
       });
 
-      mapInstance.on('mouseenter', 'polities-fill', () => {
+      mapInstance.on('mouseenter', 'polities-fill', (e) => {
         mapInstance.getCanvas().style.cursor = 'pointer';
+        // Prefetch cities for hovered polity
+        if (e.features && e.features.length > 0) {
+          const polityId = e.features[0].properties?.id;
+          if (polityId) {
+            prefetchCitiesRef.current(polityId);
+          }
+        }
       });
       mapInstance.on('mouseleave', 'polities-fill', () => {
         mapInstance.getCanvas().style.cursor = '';
@@ -383,6 +553,46 @@ export function WorldMap() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (map.current as any).setProjection(newIsGlobe ? { type: 'globe' } : { type: 'mercator' });
   }, [isGlobe]);
+
+  // Change base map tiles when style changes
+  useEffect(() => {
+    if (!map.current || !mapReady) return;
+
+    const m = map.current;
+    const firstPolityLayer = m.getLayer('polities-fill') ? 'polities-fill' : undefined;
+
+    // Remove all base map layers and sources (all styles)
+    const layersToRemove = ['carto-light-layer', 'stamen-terrain-layer', 'carto-labels-layer', 'esri-satellite-layer', 'carto-labels-dark-layer'];
+    const sourcesToRemove = ['carto-light', 'stamen-terrain', 'carto-labels', 'esri-satellite', 'carto-labels-dark'];
+
+    for (const layerId of layersToRemove) {
+      if (m.getLayer(layerId)) {
+        m.removeLayer(layerId);
+      }
+    }
+    for (const sourceId of sourcesToRemove) {
+      if (m.getSource(sourceId)) {
+        m.removeSource(sourceId);
+      }
+    }
+
+    // Add sources and layers for the current style
+    const styleSpec = MAP_STYLES[mapStyle];
+
+    // Add all sources
+    for (const [sourceId, sourceSpec] of Object.entries(styleSpec.sources)) {
+      if (!m.getSource(sourceId)) {
+        m.addSource(sourceId, sourceSpec as maplibregl.SourceSpecification);
+      }
+    }
+
+    // Add all layers (except background) in order, before polities
+    for (const layerSpec of styleSpec.layers) {
+      if (layerSpec.id !== 'background' && !m.getLayer(layerSpec.id)) {
+        m.addLayer(layerSpec as maplibregl.LayerSpecification, firstPolityLayer);
+      }
+    }
+  }, [mapStyle, mapReady]);
 
   // Handle fly-to location
   useEffect(() => {
@@ -459,6 +669,7 @@ export function WorldMap() {
 
   // Update cities when polity changes or showCities changes
   // Cities are filtered to only show within the current polity's borders
+  // When dynamicCities is enabled, sizes are based on individuals in a 25-year window
   useEffect(() => {
     if (!map.current || !mapReady) return;
 
@@ -466,7 +677,17 @@ export function WorldMap() {
     if (!citiesSource) return;
 
     // If cities are hidden or no polity selected, clear the cities
-    if (!showCities || !selectedPolityId || !citiesData || !politiesData) {
+    if (!showCities || !selectedPolityId || !politiesData) {
+      citiesSource.setData({ type: 'FeatureCollection', features: [] });
+      return;
+    }
+
+    // Choose data source based on dynamic mode
+    const cityDataSource = dynamicCities && dynamicCitiesComputed
+      ? dynamicCitiesComputed.cities
+      : citiesData?.cities;
+
+    if (!cityDataSource) {
       citiesSource.setData({ type: 'FeatureCollection', features: [] });
       return;
     }
@@ -481,11 +702,8 @@ export function WorldMap() {
       return;
     }
 
-    // Get cities for the selected polity from API response
-    const allCities = citiesData?.cities || [];
-
     // Filter cities to only those within the current polity's borders
-    const citiesInBorders = allCities.filter(city =>
+    const citiesInBorders = cityDataSource.filter(city =>
       pointInGeometry(city.lon, city.lat, currentPolity.geometry!)
     );
 
@@ -527,70 +745,137 @@ export function WorldMap() {
       type: 'FeatureCollection',
       features: cityFeatures,
     });
-  }, [selectedPolityId, showCities, citiesData, mapReady, politiesData]);
+  }, [selectedPolityId, showCities, citiesData, mapReady, politiesData, dynamicCities, dynamicCitiesComputed]);
+
+  // Pulse marker for a city picked from search, so the user can spot it
+  // amid the other city dots.
+  const pulseMarkerRef = useRef<maplibregl.Marker | null>(null);
+  useEffect(() => {
+    if (!map.current || !mapReady) return;
+
+    if (pulseMarkerRef.current) {
+      pulseMarkerRef.current.remove();
+      pulseMarkerRef.current = null;
+    }
+    if (!highlightedCity) return;
+
+    const el = document.createElement('div');
+    el.className = 'city-highlight-pulse';
+    pulseMarkerRef.current = new maplibregl.Marker({ element: el, anchor: 'center' })
+      .setLngLat([highlightedCity.lon, highlightedCity.lat])
+      .addTo(map.current);
+
+    return () => {
+      if (pulseMarkerRef.current) {
+        pulseMarkerRef.current.remove();
+        pulseMarkerRef.current = null;
+      }
+    };
+  }, [highlightedCity, mapReady]);
 
   return (
     <div className="absolute inset-0">
       <div ref={mapContainer} className="absolute inset-0" />
-      {/* Globe/Flat toggle - segmented control */}
-      <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-sm rounded-full shadow-lg p-1 flex">
-        <button
-          onClick={() => isGlobe && toggleGlobe()}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-            !isGlobe
-              ? 'bg-gray-900 text-white shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-          title="Flat map view"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-            />
-          </svg>
-          Flat
-        </button>
-        <button
-          onClick={() => !isGlobe && toggleGlobe()}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-            isGlobe
-              ? 'bg-gray-900 text-white shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-          title="Globe view"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          Globe
-        </button>
-      </div>
-      {/* Cities toggle - only show when polity is selected */}
-      {selectedPolityId && (
-        <div className="absolute top-16 left-4 z-10">
-          <button
-            onClick={() => setShowCities(!showCities)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all shadow-lg ${
-              showCities
-                ? 'bg-red-600 text-white'
-                : 'bg-white/90 backdrop-blur-sm text-gray-600 hover:text-gray-800'
-            }`}
-            title={showCities ? 'Hide cities' : 'Show cities'}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-              />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-            Cities
-          </button>
+      {/* Unified map controls using shadcn/ui */}
+      <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+        {/* View & Style row */}
+        <div className="flex gap-2">
+          {/* Globe/Flat toggle */}
+          <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-1">
+            <ToggleGroup
+              value={[isGlobe ? 'globe' : 'flat']}
+              onValueChange={(value) => {
+                const newValue = value[0] || (isGlobe ? 'globe' : 'flat');
+                if ((newValue === 'globe') !== isGlobe) toggleGlobe();
+              }}
+            >
+              <ToggleGroupItem value="flat" className="gap-1.5 px-3" title="Flat map projection">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                  />
+                </svg>
+                Flat
+              </ToggleGroupItem>
+              <ToggleGroupItem value="globe" className="gap-1.5 px-3" title="3D globe projection">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                Globe
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          {/* Map style toggle */}
+          <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-1">
+            <ToggleGroup
+              value={[mapStyle]}
+              onValueChange={(value) => {
+                const newValue = value[0] as typeof mapStyle;
+                if (newValue) setMapStyle(newValue);
+              }}
+            >
+              <ToggleGroupItem value="light" className="px-2.5" title="Light style">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                  />
+                </svg>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="terrain" className="px-2.5" title="Terrain with mountains">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
+              </ToggleGroupItem>
+              <ToggleGroupItem value="satellite" className="px-2.5" title="Satellite imagery">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                    d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"
+                  />
+                </svg>
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
         </div>
-      )}
+        {/* Cities row - only show when polity is selected */}
+        {selectedPolityId && (
+          <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-1 flex gap-1">
+            <Toggle
+              pressed={showCities}
+              onPressedChange={setShowCities}
+              className="gap-1.5 px-3"
+              title={showCities ? 'Hide cities' : 'Show cities on map'}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              Cities
+            </Toggle>
+            <Toggle
+              pressed={dynamicCities}
+              onPressedChange={setDynamicCities}
+              disabled={!showCities}
+              className="gap-1.5 px-3"
+              title={dynamicCities ? 'Showing 25-year window' : 'Size cities by current year'}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
+              </svg>
+              Dynamic
+            </Toggle>
+          </div>
+        )}
+      </div>
       {error && (
         <div className="absolute top-4 left-28 bg-red-50 text-red-700 px-3 py-2 rounded-lg shadow-md text-sm">
           Error: {(error as Error).message}

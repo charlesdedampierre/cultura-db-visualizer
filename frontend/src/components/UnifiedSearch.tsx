@@ -9,7 +9,11 @@ interface SearchResult {
   id: string | number;
   polityId?: number;
   polityName?: string;
+  // For city results: timeline target year (peak_year with fallbacks)
+  // and the polity's active window so we can clamp the target inside it.
+  cityTargetYear?: number | null;
   polityFromYear?: number | null;
+  polityToYear?: number | null;
   lat: number;
   lon: number;
   count?: number;
@@ -44,7 +48,7 @@ export function UnifiedSearch() {
   const [isOpen, setIsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { setSelectedPolityId, setFlyToLocation, setSelectedYear, setShowCities } = useAppStore();
+  const { setSelectedPolityId, setFlyToLocation, setSelectedYear, setShowCities, setHighlightedCity } = useAppStore();
 
   const debouncedQuery = useDebounce(query, 300);
 
@@ -82,8 +86,12 @@ export function UnifiedSearch() {
       id: c.city_id,
       polityId: c.polity_id,
       polityName: c.polity_name,
-      // Use first_individual_year (when city first appears) instead of polity_from_year
-      polityFromYear: c.first_individual_year ?? c.polity_from_year,
+      // Jump the timeline to the city's peak year (most individuals in a 25-year
+      // window) so it's prominent in both Dynamic and non-Dynamic modes.
+      // Fall back to first_individual_year, then the polity's start year.
+      cityTargetYear: c.peak_year ?? c.first_individual_year ?? c.polity_from_year,
+      polityFromYear: c.polity_from_year,
+      polityToYear: c.polity_to_year,
       lat: c.lat,
       lon: c.lon,
       count: c.count,
@@ -123,10 +131,11 @@ export function UnifiedSearch() {
           zoom: 5,
         });
       }
+      setHighlightedCity(null);
       setQuery('');
       setIsOpen(false);
     },
-    [setSelectedPolityId, setFlyToLocation, setSelectedYear]
+    [setSelectedPolityId, setFlyToLocation, setSelectedYear, setHighlightedCity]
   );
 
   const handleSelectCity = useCallback(
@@ -134,9 +143,18 @@ export function UnifiedSearch() {
       if (result.polityId) {
         setSelectedPolityId(result.polityId);
       }
-      // Set the year to when the polity was first active
-      if (result.polityFromYear !== null && result.polityFromYear !== undefined) {
-        setSelectedYear(result.polityFromYear);
+      // Jump to the city's target year (peak_year with fallbacks), but clamp
+      // inside the polity's active range — otherwise the polity isn't
+      // rendered at that year and the city dot never appears.
+      let targetYear = result.cityTargetYear ?? result.polityFromYear;
+      if (targetYear !== null && targetYear !== undefined) {
+        if (result.polityFromYear != null && targetYear < result.polityFromYear) {
+          targetYear = result.polityFromYear;
+        }
+        if (result.polityToYear != null && targetYear > result.polityToYear) {
+          targetYear = result.polityToYear;
+        }
+        setSelectedYear(targetYear);
       }
       setShowCities(true);
       setFlyToLocation({
@@ -144,10 +162,11 @@ export function UnifiedSearch() {
         lat: result.lat,
         zoom: 8,
       });
+      setHighlightedCity({ id: result.id as string, lat: result.lat, lon: result.lon });
       setQuery('');
       setIsOpen(false);
     },
-    [setSelectedPolityId, setFlyToLocation, setShowCities, setSelectedYear]
+    [setSelectedPolityId, setFlyToLocation, setShowCities, setSelectedYear, setHighlightedCity]
   );
 
   const handleSelect = useCallback(
@@ -253,7 +272,14 @@ export function UnifiedSearch() {
                       onClick={() => handleSelect(result)}
                       className="w-full px-4 py-2 text-left hover:bg-red-50 transition-colors border-b border-gray-100 last:border-b-0"
                     >
-                      <span className="text-sm font-medium text-gray-900">{result.name}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-gray-900">{result.name}</span>
+                        {result.polityName && (
+                          <span className="text-xs text-gray-400 whitespace-nowrap truncate max-w-[55%]">
+                            {result.polityName}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ))}
                 </>

@@ -1,0 +1,2 @@
+ALTER TABLE top_cities_cache
+ADD COLUMN IF NOT EXISTS peak_year INTEGER;
