@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '../store';
+import { displayPolityName } from '../lib/utils';
 import { searchPolities, searchCities } from '../api';
 
 interface SearchResult {
@@ -264,7 +265,7 @@ export function UnifiedSearch() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-medium text-gray-900 flex items-center gap-1.5">
-                          {result.isMeta ? result.name.replace(/^\(|\)$/g, '') : result.name}
+                          {displayPolityName(result.name)}
                           {result.isMeta && (
                             <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
                               Meta

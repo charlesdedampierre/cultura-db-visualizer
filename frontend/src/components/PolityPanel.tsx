@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ExternalLink, ChevronUp, X } from 'lucide-react';
 import { useAppStore } from '../store';
+import { displayPolityName } from '../lib/utils';
 import { getPolityDetails } from '../api';
 import { EvolutionChart } from './EvolutionChart';
 import { OccupationsChart } from './OccupationsChart';
@@ -14,15 +15,15 @@ function formatYear(year: number | null): string {
   return `${year} CE`;
 }
 
-// Meta polities are stored parenthesized, e.g. "(Roman Republic)". Strip the
-// wrapping parens for display.
-function displayName(name: string | undefined, isMeta: boolean | undefined): string {
-  if (!name) return '';
-  return isMeta ? name.replace(/^\(|\)$/g, '') : name;
-}
-
 export function PolityPanel() {
   const { selectedPolityId, individualsCount, focusedMetaId, setFocusedMetaId, setSelectedPolityId } = useAppStore();
+
+  // Clicking a sub-polity drops out of the meta-focus view back to the normal
+  // map with that single polity highlighted (BUN-1139 review).
+  const selectChildInNormalView = (childId: number) => {
+    setFocusedMetaId(null);
+    setSelectedPolityId(childId);
+  };
 
   const { data: polity } = useQuery({
     queryKey: ['polityDetails', selectedPolityId],
@@ -56,15 +57,8 @@ export function PolityPanel() {
                 title="Show the broader meta level this belongs to"
               >
                 <ChevronUp className="h-3.5 w-3.5" />
-                Up to {displayName(polity.parent_name ?? undefined, true)}
+                Up to {displayPolityName(polity.parent_name)}
               </button>
-            )}
-
-            {/* When this polity is the focused meta, show a Meta badge */}
-            {focusedMetaId === polity.id && polity.is_meta && (
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
-                Meta level
-              </span>
             )}
 
             {/* Exit the meta-focus view back to the granular map */}
@@ -82,7 +76,12 @@ export function PolityPanel() {
         )}
 
         <div className="flex items-baseline gap-3">
-          <h2 className="text-xl font-semibold text-gray-900">{displayName(polity?.name, polity?.is_meta)}</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{displayPolityName(polity?.name)}</h2>
+          {polity?.is_meta && (
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded self-center">
+              Meta
+            </span>
+          )}
           {polity && (
             <>
               <span className="text-sm text-gray-400">
@@ -109,10 +108,10 @@ export function PolityPanel() {
             {polity.children.map((child) => (
               <button
                 key={child.id}
-                onClick={() => setSelectedPolityId(child.id)}
+                onClick={() => selectChildInNormalView(child.id)}
                 className="text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded transition-colors"
               >
-                {displayName(child.name, child.name.startsWith('('))}
+                {displayPolityName(child.name)}
               </button>
             ))}
           </div>

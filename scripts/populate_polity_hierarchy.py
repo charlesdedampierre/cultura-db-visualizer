@@ -28,6 +28,7 @@ import argparse
 import json
 import sqlite3
 import sys
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -75,69 +76,78 @@ def build_hierarchy_mapping(clio_db: Path):
     rows = [dict(r) for r in cur.fetchall()]
     conn.close()
 
-    # A polity is a meta if any other polity points to it as a parent. The
-    # table's own `is_parent` flag only marks nested metas (metas that are also
-    # children), so we derive the full meta set from the parent links instead.
-    meta_ids = {
-        r[k]
+    # Polity id -> name (for normalisation / trivial-wrapper detection).
+    name_conn = sqlite3.connect(clio_db)
+    name_conn.row_factory = sqlite3.Row
+    ncur = name_conn.cursor()
+    ncur.execute("SELECT id, name FROM polities")
+    name_of = {r["id"]: r["name"] for r in ncur}
+    name_conn.close()
+
+    def norm(pid):
+        """Normalised name — strip the wrapping parens cliopatria uses for metas."""
+        n = (name_of.get(pid) or "").strip()
+        return n.lstrip("(").rstrip(")").strip()
+
+    # Immediate parent links: a polity points at its level1_id parent.
+    immediate_parent = {
+        r["polity_id"]: r["level1_id"]
         for r in rows
-        for k in ("level1_id", "level2_id", "level3_id")
-        if r[k] is not None
+        if r["is_child"] and r["level1_id"] is not None
     }
 
-    mapping = {}
-    ancestors = {}  # polity_id -> [level1_id, level2_id, level3_id] (non-null)
-    for r in rows:
-        pid = r["polity_id"]
-        parent_id = r["level1_id"] if r["is_child"] else None
-        mapping[pid] = {
-            "parent_id": parent_id,
-            "is_meta": pid in meta_ids,
-            "depth": r["depth"] or 0,
-        }
-        ancestors[pid] = [
-            r[k] for k in ("level1_id", "level2_id", "level3_id") if r[k] is not None
-        ]
+    # Children grouped by their immediate parent.
+    children = defaultdict(list)
+    for pid, par in immediate_parent.items():
+        children[par].append(pid)
 
-    # Ensure every meta has an entry even if it has no row of its own.
-    for mid in meta_ids:
-        if mid not in mapping:
-            mapping[mid] = {"parent_id": None, "is_meta": True, "depth": 0}
+    # A "trivial wrapper" is a parenthesised meta whose children all normalise to
+    # its own name, e.g. "(Roman Empire)" wrapping only "Roman Empire". Such a
+    # node is not a meaningful meta level — it must be collapsed so a polity is
+    # never both a meta and its own member (BUN-1139 review feedback).
+    trivial = set()
+    for par, kids in children.items():
+        par_norm = norm(par)
+        if all(norm(k) == par_norm for k in kids):
+            trivial.add(par)
 
-    # Validate: walking parent_id upward should reproduce the level2/level3 chain.
-    mismatches = 0
-    for pid, anc in ancestors.items():
-        if len(anc) <= 1:
-            continue
-        walked = []
-        cur_pid = mapping[pid]["parent_id"]
+    def effective_parent(pid):
+        """Walk up past trivial wrappers to the first real meta (or None)."""
         seen = set()
-        while cur_pid is not None and cur_pid not in seen and len(walked) < 5:
-            seen.add(cur_pid)
-            walked.append(cur_pid)
-            nxt = mapping.get(cur_pid, {}).get("parent_id")
-            cur_pid = nxt
-        # Compare the distinct expected ancestors vs the walked chain (order-tolerant
-        # on duplicates — some rows repeat the top level in level2/level3).
-        expected = []
-        for a in anc:
-            if a not in expected:
-                expected.append(a)
-        if expected[: len(walked)] != walked[: len(expected)] and set(walked) != set(
-            expected
-        ):
-            mismatches += 1
-    if mismatches:
-        print(
-            f"  ! {mismatches} polities where parent_id walk != level2/3 chain "
-            f"(kept parent_id = level1_id; deeper levels via recursion may differ)"
-        )
+        cur_p = immediate_parent.get(pid)
+        while cur_p is not None and cur_p in trivial and cur_p not in seen:
+            seen.add(cur_p)
+            cur_p = immediate_parent.get(cur_p)
+        return cur_p
+
+    # Build the cleaned parent map, then derive metas + depth from it.
+    all_ids = set(immediate_parent) | {
+        p for ks in children.values() for p in ks
+    } | set(children)
+    parent_of = {pid: effective_parent(pid) for pid in all_ids}
+    real_meta_ids = {p for p in parent_of.values() if p is not None}
+
+    def depth_of(pid):
+        d, seen, cur_p = 0, set(), parent_of.get(pid)
+        while cur_p is not None and cur_p not in seen:
+            seen.add(cur_p)
+            d += 1
+            cur_p = parent_of.get(cur_p)
+        return d
+
+    mapping = {}
+    for pid in all_ids:
+        mapping[pid] = {
+            "parent_id": parent_of.get(pid),
+            "is_meta": pid in real_meta_ids,
+            "depth": depth_of(pid),
+        }
 
     n_child = sum(1 for v in mapping.values() if v["parent_id"] is not None)
     n_meta = sum(1 for v in mapping.values() if v["is_meta"])
     print(
-        f"  hierarchy rows: {len(mapping)} | with parent: {n_child} | "
-        f"meta (is_parent): {n_meta}"
+        f"  hierarchy rows: {len(mapping)} | with real parent: {n_child} | "
+        f"real metas: {n_meta} | collapsed trivial wrappers: {len(trivial)}"
     )
     return mapping
 
@@ -167,10 +177,32 @@ def backup_polities(supabase) -> Path:
 
 
 def apply_mapping(supabase, mapping: dict):
-    """UPDATE parent_id/is_meta/depth for each polity. Only touches the 3 columns."""
-    items = list(mapping.items())
+    """Reset + set parent_id/is_meta/depth for EVERY Supabase polity.
+
+    We iterate over the live polity ids (not just the hierarchy ids) so that any
+    polity not in the hierarchy — or one previously mis-flagged as a trivial
+    wrapper — is reset to the default (no parent, not a meta). Only the 3
+    hierarchy columns are touched.
+    """
+    default = {"parent_id": None, "is_meta": False, "depth": 0}
+    ids, page, page_size = [], 0, 1000
+    while True:
+        resp = (
+            supabase.table("polities")
+            .select("id")
+            .range(page * page_size, page * page_size + page_size - 1)
+            .execute()
+        )
+        if not resp.data:
+            break
+        ids.extend(r["id"] for r in resp.data)
+        if len(resp.data) < page_size:
+            break
+        page += 1
+
     updated = 0
-    for pid, vals in tqdm(items, desc="Updating polities"):
+    for pid in tqdm(ids, desc="Updating polities"):
+        vals = mapping.get(pid, default)
         supabase.table("polities").update(
             {
                 "parent_id": vals["parent_id"],

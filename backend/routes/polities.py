@@ -22,6 +22,41 @@ HIERARCHY_FILTERS = {
 }
 
 
+def _norm_name(name: str | None) -> str:
+    """Normalised polity name — drop the wrapping parens cliopatria uses for metas."""
+    if not name:
+        return ""
+    return name.strip().lstrip("(").rstrip(")").strip().lower()
+
+
+def _dedupe_children(rows: list[dict]) -> list[dict]:
+    """Collapse paren/non-paren twins that share a normalised name.
+
+    e.g. "(Kingdom of the Franks)" + "Kingdom of the Franks" -> one entry.
+    Prefer the non-parenthesised name, then the one with more individuals.
+    `rows` must contain id, name, and (optionally) individuals_count.
+    """
+    best: dict[str, dict] = {}
+    for r in rows:
+        key = _norm_name(r["name"])
+        if not key:
+            continue
+        cur = best.get(key)
+        if cur is None:
+            best[key] = r
+            continue
+        # Prefer non-paren, then higher individuals_count, then lower id.
+        cand_paren = r["name"].strip().startswith("(")
+        cur_paren = cur["name"].strip().startswith("(")
+        better = (
+            (not cand_paren, r.get("individuals_count") or 0, -r["id"])
+            > (not cur_paren, cur.get("individuals_count") or 0, -cur["id"])
+        )
+        if better:
+            best[key] = r
+    return list(best.values())
+
+
 @router.get("/active", response_model=ActivePolitiesResponse)
 def get_active_polities(
     year: int = Query(..., description="Year to query"),
@@ -84,43 +119,58 @@ def get_active_subtree(
     polity_id: int,
     year: int = Query(..., description="Year to query"),
 ):
-    """Geometries for a meta polity + its direct children active at `year`.
+    """Geometries for a meta polity + up to TWO levels of sub-polities active at `year`.
 
-    Used by the map's meta-focus view: when the user drills UP to a meta level
-    we render the meta's own territory together with the more granular polities
-    one level below it (per BUN-1139). Drilling is one level at a time — a child
-    that is itself a meta can be focused in turn.
+    Used by the map's meta-focus view: drilling UP to a meta renders the meta's
+    own territory together with the more granular polities below it — two levels
+    deep so nested groupings (e.g. dynasties under a sultanate) are visible too
+    (BUN-1139 review). Paren/non-paren duplicates are collapsed.
     """
     db = get_db()
 
-    children = db.table("polities").select("id, name, type").eq(
+    # Level 1: direct children. Level 2: children of any child that is a meta.
+    lvl1 = db.table("polities").select("id, name, type, is_meta, individuals_count").eq(
         "parent_id", polity_id
     ).execute().data
-    child_ids = [c["id"] for c in children]
-    name_by_id = {c["id"]: c["name"] for c in children}
+    lvl1_meta_ids = [c["id"] for c in lvl1 if c.get("is_meta")]
+    lvl2 = []
+    if lvl1_meta_ids:
+        lvl2 = db.table("polities").select(
+            "id, name, type, is_meta, individuals_count"
+        ).in_("parent_id", lvl1_meta_ids).execute().data
 
-    # Include the meta itself.
+    children = _dedupe_children(lvl1 + lvl2)
+
     meta = db.table("polities").select("id, name, type").eq("id", polity_id).execute().data
+    name_by_id = {c["id"]: c["name"] for c in children}
     if meta:
         name_by_id[polity_id] = meta[0]["name"]
-    ids = [polity_id] + child_ids
+    ids = [polity_id] + [c["id"] for c in children]
 
     period_rows = db.table("polity_periods").select(
         "polity_id, polity_name, from_year, to_year, geometry"
     ).in_("polity_id", ids).lte("from_year", year).gte("to_year", year).execute().data
 
     polities = []
+    seen_norm: set[str] = set()
     for row in period_rows:
+        pid = row["polity_id"]
+        disp_name = name_by_id.get(pid, row["polity_name"])
+        # Guard against the same normalised name slipping in via a second period.
+        norm = _norm_name(disp_name)
+        if pid != polity_id and norm in seen_norm:
+            continue
+        seen_norm.add(norm)
+
         geometry = None
         if row["geometry"]:
             try:
                 geometry = json.loads(row["geometry"])
             except json.JSONDecodeError:
                 pass
-        pid = row["polity_id"]
         polities.append(PolityWithGeometry(
             id=pid,
-            name=name_by_id.get(pid, row["polity_name"]),
+            name=disp_name,
             type="meta" if pid == polity_id else "leaf",
             from_year=row["from_year"],
             to_year=row["to_year"],
@@ -188,12 +238,31 @@ def search_polities(
 
     # Use ilike for case-insensitive partial match across all hierarchy levels.
     response = db.table("polities").select(
-        "id, name, type, parent_id, is_meta, depth"
-    ).ilike("name", f"%{q}%").limit(limit).execute()
+        "id, name, type, parent_id, is_meta, depth, individuals_count"
+    ).ilike("name", f"%{q}%").limit(limit * 3).execute()
+
+    # Collapse paren/non-paren twins, preferring the meta, then the non-paren,
+    # then the more-populated polity (BUN-1139 review: no duplicate names).
+    deduped: dict[str, dict] = {}
+    for p in response.data:
+        key = _norm_name(p["name"])
+        if not key:
+            continue
+        cur = deduped.get(key)
+        if cur is None:
+            deduped[key] = p
+            continue
+        cand = (p.get("is_meta", False), not p["name"].strip().startswith("("),
+                p.get("individuals_count") or 0, -p["id"])
+        curr = (cur.get("is_meta", False), not cur["name"].strip().startswith("("),
+                cur.get("individuals_count") or 0, -cur["id"])
+        if cand > curr:
+            deduped[key] = p
+    response_data = list(deduped.values())[:limit]
 
     # Get centroid and date range for each polity from their periods
     results = []
-    for polity in response.data:
+    for polity in response_data:
         # Get geometry and dates for centroid calculation
         period_response = db.table("polity_periods").select(
             "geometry, from_year, to_year"
@@ -278,10 +347,12 @@ def get_polity(polity_id: int):
         if parent_resp.data:
             parent_name = parent_resp.data[0]["name"]
 
-    children_resp = db.table("polities").select("id, name").eq(
-        "parent_id", polity_id
-    ).order("name").execute()
-    children = [{"id": c["id"], "name": c["name"]} for c in children_resp.data]
+    children_resp = db.table("polities").select(
+        "id, name, individuals_count"
+    ).eq("parent_id", polity_id).execute()
+    children_deduped = _dedupe_children(children_resp.data)
+    children_deduped.sort(key=lambda c: _norm_name(c["name"]))
+    children = [{"id": c["id"], "name": c["name"]} for c in children_deduped]
 
     return {
         "id": polity["id"],

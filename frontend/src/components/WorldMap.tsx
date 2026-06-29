@@ -6,6 +6,7 @@ import { getActivePolities, getActiveSubtree, getPolityTopCities, getPolityIndiv
 import type { PolityWithGeometry } from '../types';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Toggle } from '@/components/ui/toggle';
+import { displayPolityName } from '../lib/utils';
 
 const POLITY_COLORS = [
   '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
@@ -257,10 +258,15 @@ export function WorldMap() {
   const [isGlobe, setIsGlobe] = useState(true);
   const queryClient = useQueryClient();
 
-  const { selectedYear, selectedPolityId, setSelectedPolityId, focusedMetaId, flyToLocation, setFlyToLocation, showCities, setShowCities, dynamicCities, setDynamicCities, setCitiesForPolity, mapStyle, setMapStyle, highlightedCity, setHighlightedCity, setSelectedCityId } = useAppStore();
+  const { selectedYear, selectedPolityId, setSelectedPolityId, focusedMetaId, setFocusedMetaId, flyToLocation, setFlyToLocation, showCities, setShowCities, dynamicCities, setDynamicCities, setCitiesForPolity, mapStyle, setMapStyle, highlightedCity, setHighlightedCity, setSelectedCityId } = useAppStore();
 
   const setSelectedPolityIdRef = useRef(setSelectedPolityId);
   setSelectedPolityIdRef.current = setSelectedPolityId;
+  // Refs so the once-bound map click handler always sees current focus state.
+  const focusedMetaIdRef = useRef(focusedMetaId);
+  focusedMetaIdRef.current = focusedMetaId;
+  const setFocusedMetaIdRef = useRef(setFocusedMetaId);
+  setFocusedMetaIdRef.current = setFocusedMetaId;
   const setHighlightedCityRef = useRef(setHighlightedCity);
   setHighlightedCityRef.current = setHighlightedCity;
   const setSelectedCityIdRef = useRef(setSelectedCityId);
@@ -401,8 +407,15 @@ export function WorldMap() {
         type: 'line',
         source: 'polities',
         paint: {
-          'line-color': ['get', 'color'],
-          'line-width': ['case', ['get', 'selected'], 3, 1],
+          // Meta polities get a thick dark border so the broader level reads
+          // clearly under its sub-polities (BUN-1139 review).
+          'line-color': ['case', ['get', 'isMeta'], '#92400e', ['get', 'color']],
+          'line-width': [
+            'case',
+            ['get', 'isMeta'], 4,
+            ['get', 'selected'], 3,
+            1,
+          ],
         },
       });
 
@@ -526,6 +539,12 @@ export function WorldMap() {
         if (e.features && e.features.length > 0) {
           const polityId = e.features[0].properties?.id;
           if (polityId) {
+            // In meta-focus, clicking a sub-polity drops back to the normal
+            // map with that polity highlighted (BUN-1139 review). Clicking the
+            // meta itself stays in focus.
+            if (focusedMetaIdRef.current != null && polityId !== focusedMetaIdRef.current) {
+              setFocusedMetaIdRef.current(null);
+            }
             setSelectedPolityIdRef.current(polityId);
             setHighlightedCityRef.current(null);
           }
@@ -662,9 +681,11 @@ export function WorldMap() {
       type: 'Feature' as const,
       properties: {
         id: polity.id,
-        name: polity.name,
+        name: displayPolityName(polity.name),
         color: POLITY_COLORS[polity.id % POLITY_COLORS.length],
         selected: polity.id === selectedPolityId,
+        // In meta-focus the backend marks the meta polity with type 'meta'.
+        isMeta: polity.type === 'meta',
         area,
       },
       geometry: polity.geometry!,
@@ -677,7 +698,7 @@ export function WorldMap() {
         type: 'Feature' as const,
         properties: {
           id: polity.id,
-          name: polity.name,
+          name: displayPolityName(polity.name),
           area,
         },
         geometry: {
