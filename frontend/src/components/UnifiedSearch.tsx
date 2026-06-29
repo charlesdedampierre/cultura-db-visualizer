@@ -7,6 +7,7 @@ interface SearchResult {
   type: 'polity' | 'city';
   name: string;
   id: string | number;
+  isMeta?: boolean;
   polityId?: number;
   polityName?: string;
   // For city results: timeline target year (peak_year with fallbacks)
@@ -48,7 +49,7 @@ export function UnifiedSearch() {
   const [isOpen, setIsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { setSelectedPolityId, setSelectedCityId, setFlyToLocation, setSelectedYear, setShowCities, setHighlightedCity } = useAppStore();
+  const { setSelectedPolityId, setSelectedCityId, setFocusedMetaId, setFlyToLocation, setSelectedYear, setShowCities, setHighlightedCity } = useAppStore();
 
   const debouncedQuery = useDebounce(query, 300);
 
@@ -74,6 +75,7 @@ export function UnifiedSearch() {
       type: 'polity' as const,
       name: p.name,
       id: p.id,
+      isMeta: p.is_meta,
       lat: p.centroid?.[1] ?? 0,
       lon: p.centroid?.[0] ?? 0,
       fromYear: p.from_year,
@@ -120,7 +122,15 @@ export function UnifiedSearch() {
 
   const handleSelectPolity = useCallback(
     (result: SearchResult) => {
-      setSelectedPolityId(result.id as number);
+      // Searching a meta level drills into it: the map shows the meta + the
+      // more granular levels around it (BUN-1139). A granular hit clears any
+      // prior meta focus and selects it normally.
+      if (result.isMeta) {
+        setFocusedMetaId(result.id as number);
+      } else {
+        setFocusedMetaId(null);
+        setSelectedPolityId(result.id as number);
+      }
       if (result.fromYear !== null && result.fromYear !== undefined) {
         setSelectedYear(result.fromYear);
       }
@@ -135,7 +145,7 @@ export function UnifiedSearch() {
       setQuery('');
       setIsOpen(false);
     },
-    [setSelectedPolityId, setFlyToLocation, setSelectedYear, setHighlightedCity]
+    [setSelectedPolityId, setFocusedMetaId, setFlyToLocation, setSelectedYear, setHighlightedCity]
   );
 
   const handleSelectCity = useCallback(
@@ -253,7 +263,14 @@ export function UnifiedSearch() {
                       className="w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors border-b border-gray-100"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-gray-900">{result.name}</span>
+                        <span className="text-sm font-medium text-gray-900 flex items-center gap-1.5">
+                          {result.isMeta ? result.name.replace(/^\(|\)$/g, '') : result.name}
+                          {result.isMeta && (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                              Meta
+                            </span>
+                          )}
+                        </span>
                         <span className="text-xs text-gray-400 whitespace-nowrap">
                           {formatYear(result.fromYear)} - {formatYear(result.toYear)}
                         </span>

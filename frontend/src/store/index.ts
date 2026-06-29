@@ -25,6 +25,11 @@ interface AppState {
   selectedPolityId: number | null;
   setSelectedPolityId: (id: number | null) => void;
 
+  // Meta-focus (BUN-1139): when set, the map renders this meta polity's
+  // territory + its direct children instead of the global leaf view.
+  focusedMetaId: number | null;
+  setFocusedMetaId: (id: number | null) => void;
+
   // Selected city (opens the city panel)
   selectedCityId: string | null;
   setSelectedCityId: (id: string | null) => void;
@@ -86,6 +91,7 @@ export const useAppStore = create<AppState>((set) => ({
   setHierarchyMode: (mode) => set({
     hierarchyMode: mode,
     selectedPolityId: null,
+    focusedMetaId: null,
     currentPage: 1,
     filterYear: null,
     filterOccupation: null,
@@ -101,6 +107,18 @@ export const useAppStore = create<AppState>((set) => ({
     selectedCityId: id != null ? null : state.selectedCityId,
     currentPage: 1,
     filterYear: id != null ? Math.floor(state.selectedYear / 25) * 25 : null,
+    filterOccupation: null,
+  })),
+
+  // Meta-focus. Setting a meta also selects it (panel shows the meta) and
+  // closes any open city panel; clearing it returns to the global leaf view.
+  focusedMetaId: null,
+  setFocusedMetaId: (id) => set((state) => ({
+    focusedMetaId: id,
+    selectedPolityId: id != null ? id : state.selectedPolityId,
+    selectedCityId: id != null ? null : state.selectedCityId,
+    currentPage: 1,
+    filterYear: id != null ? Math.floor(state.selectedYear / 25) * 25 : state.filterYear,
     filterOccupation: null,
   })),
 

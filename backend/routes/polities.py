@@ -79,6 +79,57 @@ def get_active_polities(
     return ActivePolitiesResponse(year=year, polities=polities)
 
 
+@router.get("/{polity_id}/active-subtree", response_model=ActivePolitiesResponse)
+def get_active_subtree(
+    polity_id: int,
+    year: int = Query(..., description="Year to query"),
+):
+    """Geometries for a meta polity + its direct children active at `year`.
+
+    Used by the map's meta-focus view: when the user drills UP to a meta level
+    we render the meta's own territory together with the more granular polities
+    one level below it (per BUN-1139). Drilling is one level at a time — a child
+    that is itself a meta can be focused in turn.
+    """
+    db = get_db()
+
+    children = db.table("polities").select("id, name, type").eq(
+        "parent_id", polity_id
+    ).execute().data
+    child_ids = [c["id"] for c in children]
+    name_by_id = {c["id"]: c["name"] for c in children}
+
+    # Include the meta itself.
+    meta = db.table("polities").select("id, name, type").eq("id", polity_id).execute().data
+    if meta:
+        name_by_id[polity_id] = meta[0]["name"]
+    ids = [polity_id] + child_ids
+
+    period_rows = db.table("polity_periods").select(
+        "polity_id, polity_name, from_year, to_year, geometry"
+    ).in_("polity_id", ids).lte("from_year", year).gte("to_year", year).execute().data
+
+    polities = []
+    for row in period_rows:
+        geometry = None
+        if row["geometry"]:
+            try:
+                geometry = json.loads(row["geometry"])
+            except json.JSONDecodeError:
+                pass
+        pid = row["polity_id"]
+        polities.append(PolityWithGeometry(
+            id=pid,
+            name=name_by_id.get(pid, row["polity_name"]),
+            type="meta" if pid == polity_id else "leaf",
+            from_year=row["from_year"],
+            to_year=row["to_year"],
+            geometry=geometry,
+        ))
+
+    return ActivePolitiesResponse(year=year, polities=polities)
+
+
 @router.get("/{polity_id}/evolution", response_model=PolityEvolution)
 def get_polity_evolution(polity_id: int):
     """Get individual count per 25-year period for a polity."""
@@ -127,13 +178,18 @@ def search_polities(
     q: str = Query(..., min_length=1, description="Search query for polity name"),
     limit: int = Query(10, ge=1, le=50, description="Maximum number of results"),
 ):
-    """Search polities by name (case-insensitive partial match). Only returns leaf polities shown on map."""
+    """Search polities by name (case-insensitive partial match).
+
+    Returns both granular polities and meta levels. A meta hit is flagged with
+    ``is_meta`` so the UI can focus it and reveal the more granular levels
+    around it (BUN-1139).
+    """
     db = get_db()
 
-    # Use ilike for case-insensitive partial match, filter to leaf polities only
+    # Use ilike for case-insensitive partial match across all hierarchy levels.
     response = db.table("polities").select(
-        "id, name, type"
-    ).ilike("name", f"%{q}%").in_("display_mode", ["both", "leaf"]).limit(limit).execute()
+        "id, name, type, parent_id, is_meta, depth"
+    ).ilike("name", f"%{q}%").limit(limit).execute()
 
     # Get centroid and date range for each polity from their periods
     results = []
@@ -180,8 +236,13 @@ def search_polities(
             "from_year": from_year,
             "to_year": to_year,
             "centroid": centroid,
+            "parent_id": polity.get("parent_id"),
+            "is_meta": polity.get("is_meta", False),
+            "depth": polity.get("depth", 0),
         })
 
+    # Surface meta levels first so "search a meta" lands on the meta itself.
+    results.sort(key=lambda r: (not r["is_meta"], r["name"].lower()))
     return {"results": results}
 
 
@@ -208,6 +269,20 @@ def get_polity(polity_id: int):
         from_year = min(p["from_year"] for p in periods_response.data)
         to_year = max(p["to_year"] for p in periods_response.data)
 
+    # Hierarchy (BUN-1139): immediate meta parent + direct children, so the UI
+    # can offer "go up to the meta level" and list the granular levels below.
+    parent_id = polity.get("parent_id")
+    parent_name = None
+    if parent_id is not None:
+        parent_resp = db.table("polities").select("name").eq("id", parent_id).execute()
+        if parent_resp.data:
+            parent_name = parent_resp.data[0]["name"]
+
+    children_resp = db.table("polities").select("id, name").eq(
+        "parent_id", polity_id
+    ).order("name").execute()
+    children = [{"id": c["id"], "name": c["name"]} for c in children_resp.data]
+
     return {
         "id": polity["id"],
         "name": polity["name"],
@@ -217,4 +292,9 @@ def get_polity(polity_id: int):
         "individuals_count": polity["individuals_count"],
         "from_year": from_year,
         "to_year": to_year,
+        "parent_id": parent_id,
+        "parent_name": parent_name,
+        "is_meta": polity.get("is_meta", False),
+        "depth": polity.get("depth", 0),
+        "children": children,
     }

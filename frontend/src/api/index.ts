@@ -33,6 +33,11 @@ export async function getPolityDetails(polityId: number): Promise<PolityDetails>
   return fetchJson<PolityDetails>(`${API_BASE}/polities/${polityId}`);
 }
 
+// Get a meta polity + its direct children active at a year (for meta-focus map view)
+export async function getActiveSubtree(polityId: number, year: number): Promise<ActivePolitiesResponse> {
+  return fetchJson<ActivePolitiesResponse>(`${API_BASE}/polities/${polityId}/active-subtree?year=${year}`);
+}
+
 // Get polity evolution data
 export async function getPolityEvolution(polityId: number): Promise<PolityEvolution> {
   return fetchJson<PolityEvolution>(`${API_BASE}/polities/${polityId}/evolution`);

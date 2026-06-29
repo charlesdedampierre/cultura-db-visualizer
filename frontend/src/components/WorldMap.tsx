@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '../store';
-import { getActivePolities, getPolityTopCities, getPolityIndividualsCities } from '../api';
+import { getActivePolities, getActiveSubtree, getPolityTopCities, getPolityIndividualsCities } from '../api';
 import type { PolityWithGeometry } from '../types';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Toggle } from '@/components/ui/toggle';
@@ -257,7 +257,7 @@ export function WorldMap() {
   const [isGlobe, setIsGlobe] = useState(true);
   const queryClient = useQueryClient();
 
-  const { selectedYear, selectedPolityId, setSelectedPolityId, flyToLocation, setFlyToLocation, showCities, setShowCities, dynamicCities, setDynamicCities, setCitiesForPolity, mapStyle, setMapStyle, highlightedCity, setHighlightedCity, setSelectedCityId } = useAppStore();
+  const { selectedYear, selectedPolityId, setSelectedPolityId, focusedMetaId, flyToLocation, setFlyToLocation, showCities, setShowCities, dynamicCities, setDynamicCities, setCitiesForPolity, mapStyle, setMapStyle, highlightedCity, setHighlightedCity, setSelectedCityId } = useAppStore();
 
   const setSelectedPolityIdRef = useRef(setSelectedPolityId);
   setSelectedPolityIdRef.current = setSelectedPolityId;
@@ -344,12 +344,25 @@ export function WorldMap() {
   }, [citiesData, selectedPolityId, setCitiesForPolity]);
 
   // Fetch active polities (always using leaf mode)
-  const { data: politiesData, error } = useQuery({
+  const { data: leafPolitiesData, error } = useQuery({
     queryKey: ['activePolities', selectedYear],
     queryFn: () => getActivePolities(selectedYear, 'leaf'),
     staleTime: Infinity, // Never refetch - cache forever during session
     placeholderData: (previousData) => previousData, // Keep showing previous data while loading
   });
+
+  // Meta-focus (BUN-1139): when a meta level is focused, render its territory
+  // together with the more granular polities one level below it.
+  const { data: subtreeData } = useQuery({
+    queryKey: ['activeSubtree', focusedMetaId, selectedYear],
+    queryFn: () => getActiveSubtree(focusedMetaId!, selectedYear),
+    enabled: focusedMetaId != null,
+    staleTime: Infinity,
+    placeholderData: (previousData) => previousData,
+  });
+
+  // The polity set the map currently renders.
+  const politiesData = focusedMetaId != null ? subtreeData : leafPolitiesData;
 
   // Initialize map once
   useEffect(() => {

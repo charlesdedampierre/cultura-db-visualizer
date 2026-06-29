@@ -57,6 +57,11 @@ export interface PaginatedIndividuals {
   individuals: Individual[];
 }
 
+export interface PolityChild {
+  id: number;
+  name: string;
+}
+
 export interface PolityDetails {
   id: number;
   name: string;
@@ -66,6 +71,12 @@ export interface PolityDetails {
   individuals_count: number | null;
   from_year: number | null;
   to_year: number | null;
+  // Hierarchy (BUN-1139)
+  parent_id: number | null;
+  parent_name: string | null;
+  is_meta: boolean;
+  depth: number;
+  children: PolityChild[];
 }
 
 export interface PolitySearchResult {
@@ -74,4 +85,7 @@ export interface PolitySearchResult {
   from_year: number | null;
   to_year: number | null;
   centroid: [number, number] | null;
+  parent_id: number | null;
+  is_meta: boolean;
+  depth: number;
 }
