@@ -127,13 +127,15 @@ export function UnifiedSearch() {
       // more granular levels around it (BUN-1139). A granular hit clears any
       // prior meta focus and selects it normally.
       if (result.isMeta) {
+        // The map will jump to the meta's mid-life so its sub-polities show;
+        // don't pin the year to the meta's start here.
         setFocusedMetaId(result.id as number);
       } else {
         setFocusedMetaId(null);
         setSelectedPolityId(result.id as number);
-      }
-      if (result.fromYear !== null && result.fromYear !== undefined) {
-        setSelectedYear(result.fromYear);
+        if (result.fromYear !== null && result.fromYear !== undefined) {
+          setSelectedYear(result.fromYear);
+        }
       }
       if (result.lat && result.lon) {
         setFlyToLocation({

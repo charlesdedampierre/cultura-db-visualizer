@@ -258,7 +258,7 @@ export function WorldMap() {
   const [isGlobe, setIsGlobe] = useState(true);
   const queryClient = useQueryClient();
 
-  const { selectedYear, selectedPolityId, setSelectedPolityId, focusedMetaId, setFocusedMetaId, flyToLocation, setFlyToLocation, showCities, setShowCities, dynamicCities, setDynamicCities, setCitiesForPolity, mapStyle, setMapStyle, highlightedCity, setHighlightedCity, setSelectedCityId } = useAppStore();
+  const { selectedYear, selectedPolityId, setSelectedPolityId, focusedMetaId, setFocusedMetaId, centerOnPolityId, setCenterOnPolityId, flyToLocation, setFlyToLocation, showCities, setShowCities, dynamicCities, setDynamicCities, setCitiesForPolity, mapStyle, setMapStyle, highlightedCity, setHighlightedCity, setSelectedCityId } = useAppStore();
 
   const setSelectedPolityIdRef = useRef(setSelectedPolityId);
   setSelectedPolityIdRef.current = setSelectedPolityId;
@@ -397,12 +397,13 @@ export function WorldMap() {
         type: 'fill',
         source: 'polities',
         paint: {
-          'fill-color': ['get', 'color'],
-          // The meta fill is kept very light so its sub-polities show through.
+          'fill-color': ['case', ['get', 'selected'], '#2563eb', ['get', 'color']],
+          // Selected stands out strongest; meta fill kept very light so its
+          // sub-polities show through.
           'fill-opacity': [
             'case',
-            ['get', 'isMeta'], 0.08,
             ['get', 'selected'], 0.55,
+            ['get', 'isMeta'], 0.08,
             0.3,
           ],
         },
@@ -413,14 +414,19 @@ export function WorldMap() {
         type: 'line',
         source: 'polities',
         paint: {
-          // Meta polities get a thick dark border so the broader level reads
-          // clearly under its sub-polities (BUN-1139 review).
-          'line-color': ['case', ['get', 'isMeta'], '#92400e', ['get', 'color']],
+          // Selected gets the strongest, brightest outline; meta a thick dark
+          // border; sub-polities in focus a medium border (BUN-1139 review).
+          'line-color': [
+            'case',
+            ['get', 'selected'], '#1d4ed8',
+            ['get', 'isMeta'], '#92400e',
+            ['get', 'color'],
+          ],
           'line-width': [
             'case',
+            ['get', 'selected'], 5,
             ['get', 'isMeta'], 4,
             ['get', 'inFocus'], 2.5,
-            ['get', 'selected'], 3,
             1,
           ],
         },
@@ -440,20 +446,17 @@ export function WorldMap() {
         source: 'polity-labels',
         layout: {
           'text-field': ['get', 'name'],
+          // Zoom interpolate MUST be the outermost expression (MapLibre rule);
+          // the meta/area cases live inside each stop. Meta names render larger.
           'text-size': [
-            'case',
-            // Meta name is larger; it sits lighter behind the sub-polity names.
-            ['get', 'isMeta'], 20,
-            [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              1, ['case', ['>', ['get', 'area'], 500], 14, 0],
-              2, ['case', ['>', ['get', 'area'], 100], 15, ['case', ['>', ['get', 'area'], 500], 15, 0]],
-              3, ['case', ['>', ['get', 'area'], 20], 16, 14],
-              5, 17,
-              7, 18,
-            ],
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            1, ['case', ['get', 'isMeta'], 18, ['case', ['>', ['get', 'area'], 500], 14, 0]],
+            2, ['case', ['get', 'isMeta'], 19, ['case', ['>', ['get', 'area'], 100], 15, 0]],
+            3, ['case', ['get', 'isMeta'], 20, ['case', ['>', ['get', 'area'], 20], 16, 14]],
+            5, ['case', ['get', 'isMeta'], 22, 17],
+            7, ['case', ['get', 'isMeta'], 22, 18],
           ],
           'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
           'text-anchor': 'center',
@@ -467,20 +470,17 @@ export function WorldMap() {
           'text-color': ['case', ['get', 'isMeta'], '#9ca3af', '#1f2937'],
           'text-halo-color': '#ffffff',
           'text-halo-width': 2,
-          // In meta-focus every level's name is forced on; otherwise area-gated.
+          // Zoom interpolate stays outermost; forceLabel (meta-focus) and the
+          // area gate are resolved inside each stop.
           'text-opacity': [
-            'case',
-            ['get', 'forceLabel'], 1,
-            [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              1, ['case', ['>', ['get', 'area'], 500], 1, 0],
-              2, ['case', ['>', ['get', 'area'], 100], 1, 0],
-              3, ['case', ['>', ['get', 'area'], 20], 1, 0],
-              4, ['case', ['>', ['get', 'area'], 5], 1, 0],
-              5, 1,
-            ],
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            1, ['case', ['get', 'forceLabel'], 1, ['case', ['>', ['get', 'area'], 500], 1, 0]],
+            2, ['case', ['get', 'forceLabel'], 1, ['case', ['>', ['get', 'area'], 100], 1, 0]],
+            3, ['case', ['get', 'forceLabel'], 1, ['case', ['>', ['get', 'area'], 20], 1, 0]],
+            4, ['case', ['get', 'forceLabel'], 1, ['case', ['>', ['get', 'area'], 5], 1, 0]],
+            5, 1,
           ],
         },
       });
@@ -668,6 +668,18 @@ export function WorldMap() {
     }
   }, [mapStyle, mapReady]);
 
+  // Recentre on a polity requested from the panel (e.g. picking a sub-polity
+  // out of a meta). Fly to the centroid of its largest polygon (BUN-1139 review).
+  useEffect(() => {
+    if (centerOnPolityId == null || !politiesData) return;
+    const p = politiesData.polities.find((x: PolityWithGeometry) => x.id === centerOnPolityId);
+    if (p?.geometry) {
+      const c = calculateCentroid(p.geometry);
+      if (c) setFlyToLocation({ lng: c[0], lat: c[1], zoom: 5 });
+    }
+    setCenterOnPolityId(null);
+  }, [centerOnPolityId, politiesData, setFlyToLocation, setCenterOnPolityId]);
+
   // Handle fly-to location
   useEffect(() => {
     if (!map.current || !mapReady || !flyToLocation) return;
@@ -772,14 +784,22 @@ export function WorldMap() {
     staleTime: Infinity,
   });
   const setSelectedYear = useAppStore((s) => s.setSelectedYear);
+  const jumpedForMetaRef = useRef<number | null>(null);
   useEffect(() => {
-    if (focusedMetaId == null || !focusedMeta) return;
-    const { from_year, to_year } = focusedMeta;
-    if (from_year == null || to_year == null) return;
-    if (selectedYear < from_year || selectedYear > to_year) {
-      setSelectedYear(Math.round((from_year + to_year) / 2));
+    if (focusedMetaId == null) {
+      jumpedForMetaRef.current = null;
+      return;
     }
-  }, [focusedMetaId, focusedMeta, selectedYear, setSelectedYear]);
+    if (!focusedMeta || jumpedForMetaRef.current === focusedMetaId) return;
+    const { from_year, to_year } = focusedMeta;
+    if (from_year != null && to_year != null) {
+      // Land mid-life: at a meta's start year its sub-polities often don't exist
+      // yet (e.g. the Frankish partitions post-date the Carolingian Empire's
+      // founding). Jump once per focus, then let the user scrub freely.
+      setSelectedYear(Math.round((from_year + to_year) / 2));
+      jumpedForMetaRef.current = focusedMetaId;
+    }
+  }, [focusedMetaId, focusedMeta, setSelectedYear]);
 
   // Update cities when polity changes or showCities changes
   // Cities are filtered to only show within the current polity's borders

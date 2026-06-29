@@ -29,6 +29,37 @@ def _norm_name(name: str | None) -> str:
     return name.strip().lstrip("(").rstrip(")").strip().lower()
 
 
+def _ring_area_centroid(ring: list) -> tuple[float, list]:
+    """Shoelace area + average-vertex centroid of one polygon ring."""
+    if not ring or len(ring) < 3:
+        return 0.0, [0.0, 0.0]
+    area = 0.0
+    for i in range(len(ring) - 1):
+        area += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1]
+    cx = sum(c[0] for c in ring) / len(ring)
+    cy = sum(c[1] for c in ring) / len(ring)
+    return abs(area / 2), [cx, cy]
+
+
+def _largest_centroid(geometry: dict):
+    """Centroid of the LARGEST polygon in a geometry (so a scattered polity like
+    the Crown of Aragon centres on its mainland, not a tiny island)."""
+    best_area, best_c = -1.0, None
+    try:
+        if geometry["type"] == "Polygon":
+            a, c = _ring_area_centroid(geometry["coordinates"][0])
+            return c if a > 0 else None
+        if geometry["type"] == "MultiPolygon":
+            for poly in geometry["coordinates"]:
+                a, c = _ring_area_centroid(poly[0])
+                if a > best_area:
+                    best_area, best_c = a, c
+            return best_c
+    except (KeyError, IndexError, TypeError):
+        return None
+    return None
+
+
 def _dedupe_children(rows: list[dict]) -> list[dict]:
     """Collapse paren/non-paren twins that share a normalised name.
 
@@ -277,26 +308,15 @@ def search_polities(
             from_year = min(p["from_year"] for p in period_response.data if p["from_year"] is not None)
             to_year = max(p["to_year"] for p in period_response.data if p["to_year"] is not None)
 
-            # Get centroid from first period with geometry
+            # Centroid from the largest polygon of the largest period geometry.
             for period in period_response.data:
                 if period["geometry"]:
                     try:
-                        geometry = json.loads(period["geometry"])
-                        # Calculate rough centroid from first coordinate
-                        if geometry["type"] == "Polygon":
-                            coords = geometry["coordinates"][0]
-                            centroid = [
-                                sum(c[0] for c in coords) / len(coords),
-                                sum(c[1] for c in coords) / len(coords),
-                            ]
-                        elif geometry["type"] == "MultiPolygon":
-                            first_poly = geometry["coordinates"][0][0]
-                            centroid = [
-                                sum(c[0] for c in first_poly) / len(first_poly),
-                                sum(c[1] for c in first_poly) / len(first_poly),
-                            ]
-                        break
-                    except (json.JSONDecodeError, KeyError, IndexError):
+                        c = _largest_centroid(json.loads(period["geometry"]))
+                        if c:
+                            centroid = c
+                            break
+                    except json.JSONDecodeError:
                         pass
 
         results.append({

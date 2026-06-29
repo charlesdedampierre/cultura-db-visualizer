@@ -30,6 +30,11 @@ interface AppState {
   focusedMetaId: number | null;
   setFocusedMetaId: (id: number | null) => void;
 
+  // One-shot request to recentre the map on a polity (e.g. after picking a
+  // sub-polity from the meta panel). WorldMap consumes then clears it.
+  centerOnPolityId: number | null;
+  setCenterOnPolityId: (id: number | null) => void;
+
   // Selected city (opens the city panel)
   selectedCityId: string | null;
   setSelectedCityId: (id: string | null) => void;
@@ -112,6 +117,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   // Meta-focus. Setting a meta also selects it (panel shows the meta) and
   // closes any open city panel; clearing it returns to the global leaf view.
+  centerOnPolityId: null,
+  setCenterOnPolityId: (id) => set({ centerOnPolityId: id }),
+
   focusedMetaId: null,
   setFocusedMetaId: (id) => set((state) => ({
     focusedMetaId: id,

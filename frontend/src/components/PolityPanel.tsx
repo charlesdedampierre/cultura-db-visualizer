@@ -16,13 +16,14 @@ function formatYear(year: number | null): string {
 }
 
 export function PolityPanel() {
-  const { selectedPolityId, individualsCount, focusedMetaId, setFocusedMetaId, setSelectedPolityId } = useAppStore();
+  const { selectedPolityId, individualsCount, focusedMetaId, setFocusedMetaId, setSelectedPolityId, setCenterOnPolityId } = useAppStore();
 
   // Clicking a sub-polity drops out of the meta-focus view back to the normal
-  // map with that single polity highlighted (BUN-1139 review).
+  // map with that single polity highlighted and centred (BUN-1139 review).
   const selectChildInNormalView = (childId: number) => {
     setFocusedMetaId(null);
     setSelectedPolityId(childId);
+    setCenterOnPolityId(childId);
   };
 
   const { data: polity } = useQuery({
