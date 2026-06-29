@@ -101,21 +101,24 @@ def build_hierarchy_mapping(clio_db: Path):
     for pid, par in immediate_parent.items():
         children[par].append(pid)
 
-    # A "trivial wrapper" is a parenthesised meta whose children all normalise to
-    # its own name, e.g. "(Roman Empire)" wrapping only "Roman Empire". Such a
-    # node is not a meaningful meta level — it must be collapsed so a polity is
-    # never both a meta and its own member (BUN-1139 review feedback).
-    trivial = set()
-    for par, kids in children.items():
+    # A node is a REAL meta only if it groups at least two *distinct* polities
+    # (by normalised name, excluding its own paren twin). This drops:
+    #   - trivial wrappers like "(Roman Empire)" -> "Roman Empire" (0 distinct), and
+    #   - degenerate single-member metas like "(Merovingian Empire)" -> only
+    #     "Kingdom of the Franks" (1 distinct),
+    # so a meta always contains more than one entity (BUN-1139 review feedback).
+    def distinct_children(par):
         par_norm = norm(par)
-        if all(norm(k) == par_norm for k in kids):
-            trivial.add(par)
+        return {norm(k) for k in children[par] if norm(k) != par_norm}
+
+    real_meta = {par for par in children if len(distinct_children(par)) >= 2}
+    not_meta = set(children) - real_meta  # collapse these out of the hierarchy
 
     def effective_parent(pid):
-        """Walk up past trivial wrappers to the first real meta (or None)."""
+        """Walk up past non-meta groupings to the first real meta (or None)."""
         seen = set()
         cur_p = immediate_parent.get(pid)
-        while cur_p is not None and cur_p in trivial and cur_p not in seen:
+        while cur_p is not None and cur_p in not_meta and cur_p not in seen:
             seen.add(cur_p)
             cur_p = immediate_parent.get(cur_p)
         return cur_p
@@ -147,7 +150,7 @@ def build_hierarchy_mapping(clio_db: Path):
     n_meta = sum(1 for v in mapping.values() if v["is_meta"])
     print(
         f"  hierarchy rows: {len(mapping)} | with real parent: {n_child} | "
-        f"real metas: {n_meta} | collapsed trivial wrappers: {len(trivial)}"
+        f"real metas: {n_meta} | collapsed non-metas: {len(not_meta)}"
     )
     return mapping
 

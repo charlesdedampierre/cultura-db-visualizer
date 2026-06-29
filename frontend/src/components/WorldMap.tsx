@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import maplibregl from 'maplibre-gl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '../store';
-import { getActivePolities, getActiveSubtree, getPolityTopCities, getPolityIndividualsCities } from '../api';
+import { getActivePolities, getActiveSubtree, getPolityDetails, getPolityTopCities, getPolityIndividualsCities } from '../api';
 import type { PolityWithGeometry } from '../types';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Toggle } from '@/components/ui/toggle';
@@ -398,7 +398,13 @@ export function WorldMap() {
         source: 'polities',
         paint: {
           'fill-color': ['get', 'color'],
-          'fill-opacity': ['case', ['get', 'selected'], 0.6, 0.3],
+          // The meta fill is kept very light so its sub-polities show through.
+          'fill-opacity': [
+            'case',
+            ['get', 'isMeta'], 0.08,
+            ['get', 'selected'], 0.55,
+            0.3,
+          ],
         },
       });
 
@@ -413,6 +419,7 @@ export function WorldMap() {
           'line-width': [
             'case',
             ['get', 'isMeta'], 4,
+            ['get', 'inFocus'], 2.5,
             ['get', 'selected'], 3,
             1,
           ],
@@ -434,14 +441,19 @@ export function WorldMap() {
         layout: {
           'text-field': ['get', 'name'],
           'text-size': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            1, ['case', ['>', ['get', 'area'], 500], 14, 0],
-            2, ['case', ['>', ['get', 'area'], 100], 15, ['case', ['>', ['get', 'area'], 500], 15, 0]],
-            3, ['case', ['>', ['get', 'area'], 20], 16, 14],
-            5, 17,
-            7, 18,
+            'case',
+            // Meta name is larger; it sits lighter behind the sub-polity names.
+            ['get', 'isMeta'], 20,
+            [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              1, ['case', ['>', ['get', 'area'], 500], 14, 0],
+              2, ['case', ['>', ['get', 'area'], 100], 15, ['case', ['>', ['get', 'area'], 500], 15, 0]],
+              3, ['case', ['>', ['get', 'area'], 20], 16, 14],
+              5, 17,
+              7, 18,
+            ],
           ],
           'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
           'text-anchor': 'center',
@@ -451,18 +463,24 @@ export function WorldMap() {
           'text-max-width': 10,
         },
         paint: {
-          'text-color': '#1f2937',
+          // Meta name lighter/greyer; sub-polity names stay dark (BUN-1139 review).
+          'text-color': ['case', ['get', 'isMeta'], '#9ca3af', '#1f2937'],
           'text-halo-color': '#ffffff',
           'text-halo-width': 2,
+          // In meta-focus every level's name is forced on; otherwise area-gated.
           'text-opacity': [
-            'interpolate',
-            ['linear'],
-            ['zoom'],
-            1, ['case', ['>', ['get', 'area'], 500], 1, 0],
-            2, ['case', ['>', ['get', 'area'], 100], 1, 0],
-            3, ['case', ['>', ['get', 'area'], 20], 1, 0],
-            4, ['case', ['>', ['get', 'area'], 5], 1, 0],
-            5, 1,
+            'case',
+            ['get', 'forceLabel'], 1,
+            [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              1, ['case', ['>', ['get', 'area'], 500], 1, 0],
+              2, ['case', ['>', ['get', 'area'], 100], 1, 0],
+              3, ['case', ['>', ['get', 'area'], 20], 1, 0],
+              4, ['case', ['>', ['get', 'area'], 5], 1, 0],
+              5, 1,
+            ],
           ],
         },
       });
@@ -676,8 +694,17 @@ export function WorldMap() {
         centroid: calculateCentroid(polity.geometry!),
       }));
 
-    // Create polygon features for fill/outline layers
-    const features = politiesWithArea.map(({ polity, area }) => ({
+    const inFocus = focusedMetaId != null;
+
+    // Create polygon features for fill/outline layers. Draw the meta first so it
+    // sits behind its sub-polities; otherwise larger polygons behind smaller.
+    const sortedForFill = [...politiesWithArea].sort((a, b) => {
+      const am = a.polity.type === 'meta' ? 0 : 1;
+      const bm = b.polity.type === 'meta' ? 0 : 1;
+      if (am !== bm) return am - bm;
+      return b.area - a.area;
+    });
+    const features = sortedForFill.map(({ polity, area }) => ({
       type: 'Feature' as const,
       properties: {
         id: polity.id,
@@ -686,6 +713,7 @@ export function WorldMap() {
         selected: polity.id === selectedPolityId,
         // In meta-focus the backend marks the meta polity with type 'meta'.
         isMeta: polity.type === 'meta',
+        inFocus,
         area,
       },
       geometry: polity.geometry!,
@@ -699,6 +727,8 @@ export function WorldMap() {
         properties: {
           id: polity.id,
           name: displayPolityName(polity.name),
+          isMeta: polity.type === 'meta',
+          forceLabel: inFocus,
           area,
         },
         geometry: {
@@ -723,7 +753,33 @@ export function WorldMap() {
         features: labelFeatures,
       });
     }
-  }, [politiesData, selectedPolityId, mapReady]);
+
+    // In meta-focus let every level's name show even if they overlap, so the
+    // meta and all its sub-polities are readable at once (BUN-1139 review).
+    if (map.current.getLayer('polity-labels')) {
+      map.current.setLayoutProperty('polity-labels', 'text-allow-overlap', inFocus);
+      map.current.setLayoutProperty('polity-labels', 'text-ignore-placement', inFocus);
+    }
+  }, [politiesData, selectedPolityId, focusedMetaId, mapReady]);
+
+  // When entering a meta, jump the timeline into the meta's lifespan so all its
+  // sub-polities are active and visible (BUN-1139 review: Abbasid/Ayyubid,
+  // Habsburg union were empty because the year sat outside the meta's range).
+  const { data: focusedMeta } = useQuery({
+    queryKey: ['polityDetails', focusedMetaId],
+    queryFn: () => getPolityDetails(focusedMetaId!),
+    enabled: focusedMetaId != null,
+    staleTime: Infinity,
+  });
+  const setSelectedYear = useAppStore((s) => s.setSelectedYear);
+  useEffect(() => {
+    if (focusedMetaId == null || !focusedMeta) return;
+    const { from_year, to_year } = focusedMeta;
+    if (from_year == null || to_year == null) return;
+    if (selectedYear < from_year || selectedYear > to_year) {
+      setSelectedYear(Math.round((from_year + to_year) / 2));
+    }
+  }, [focusedMetaId, focusedMeta, selectedYear, setSelectedYear]);
 
   // Update cities when polity changes or showCities changes
   // Cities are filtered to only show within the current polity's borders
