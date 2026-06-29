@@ -75,6 +75,16 @@ def build_hierarchy_mapping(clio_db: Path):
     rows = [dict(r) for r in cur.fetchall()]
     conn.close()
 
+    # A polity is a meta if any other polity points to it as a parent. The
+    # table's own `is_parent` flag only marks nested metas (metas that are also
+    # children), so we derive the full meta set from the parent links instead.
+    meta_ids = {
+        r[k]
+        for r in rows
+        for k in ("level1_id", "level2_id", "level3_id")
+        if r[k] is not None
+    }
+
     mapping = {}
     ancestors = {}  # polity_id -> [level1_id, level2_id, level3_id] (non-null)
     for r in rows:
@@ -82,12 +92,17 @@ def build_hierarchy_mapping(clio_db: Path):
         parent_id = r["level1_id"] if r["is_child"] else None
         mapping[pid] = {
             "parent_id": parent_id,
-            "is_meta": bool(r["is_parent"]),
+            "is_meta": pid in meta_ids,
             "depth": r["depth"] or 0,
         }
         ancestors[pid] = [
             r[k] for k in ("level1_id", "level2_id", "level3_id") if r[k] is not None
         ]
+
+    # Ensure every meta has an entry even if it has no row of its own.
+    for mid in meta_ids:
+        if mid not in mapping:
+            mapping[mid] = {"parent_id": None, "is_meta": True, "depth": 0}
 
     # Validate: walking parent_id upward should reproduce the level2/level3 chain.
     mismatches = 0
