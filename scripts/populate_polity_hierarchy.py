@@ -1,12 +1,20 @@
 """
 BUN-1139 — Populate the meta-polity hierarchy columns on Supabase `polities`.
 
-Reads the polity hierarchy from cliopatria.db and sets, for each polity:
-  - parent_id : the immediate meta level above it (level1_id), or NULL
-  - is_meta   : True if this polity is itself a parent of others (is_parent)
-  - depth     : how many meta levels exist above it (0-3)
+Reads the polity hierarchy from the AUTHORITATIVE v3 geojson
+(`cliopatria_polities_only_v3.geojson`) — NOT the stale cliopatria.db — and sets,
+for each polity:
+  - parent_id : the immediate meta level above it, or NULL
+  - is_meta   : True if it groups >= 2 distinct polities
+  - depth     : how many meta levels exist above it
 
-Walking `parent_id` upward reconstructs the full chain (leaf -> meta -> meta-of-meta).
+The geojson encodes the hierarchy by NAME:
+  - territorial nesting: a POLITY's `MemberOf` is its parent's name
+    (e.g. "Kingdom of Bohemia" -> "Holy Roman Empire"), chainable;
+  - RELATION entities (alliances/allegiances/personal unions, parenthesised
+    names) group the base polities listed in their `Components`.
+Names are matched to Supabase polity ids (preferring the real polity over its
+parenthesised twin). Walking `parent_id` upward reconstructs the full chain.
 
 Reversible by design:
   - Only UPDATEs the three new columns; never wipes/re-inserts rows.
@@ -26,7 +34,6 @@ Env (.env): SUPABASE_Project_URL, SUPABASE_SERVICE_KEY
 
 import argparse
 import json
-import sqlite3
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -38,11 +45,15 @@ from tqdm import tqdm
 ROOT = Path(__file__).parent.parent
 load_dotenv(ROOT / ".env")
 
-CLIO_DB_PATH = Path(
+GEOJSON_PATH = Path(
     "/Users/charlesdedampierre/Desktop/Rsearch Folder/cultura/cultura_database/"
-    "cliopatria_data/processing/data/cliopatria.db"
+    "cliopatria_data/cliopatria_V2/cliopatria_polities_only_v3.geojson"
 )
 BACKUP_DIR = ROOT / "data" / "backups"
+
+
+def _norm(name):
+    return (name or "").strip().lstrip("(").rstrip(")").strip().lower()
 
 
 def get_supabase_client():
@@ -57,65 +68,98 @@ def get_supabase_client():
     return create_client(url, key)
 
 
-def build_hierarchy_mapping(clio_db: Path):
-    """Return {polity_id: {parent_id, is_meta, depth}} from cliopatria.db."""
-    if not clio_db.exists():
-        raise FileNotFoundError(f"cliopatria.db not found at {clio_db}")
+def build_hierarchy_mapping(geojson_path: Path, polity_rows: list):
+    """Return {polity_id: {parent_id, is_meta, depth}} from the v3 geojson.
 
-    conn = sqlite3.connect(clio_db)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT polity_id, polity_name,
-               level1_id, level2_id, level3_id,
-               depth, is_parent, is_child
-        FROM polity_hierarchy_levels
-        """
-    )
-    rows = [dict(r) for r in cur.fetchall()]
-    conn.close()
+    `polity_rows` is the live Supabase `polities` (id, name, individuals_count),
+    used to resolve geojson names to ids.
+    """
+    if not geojson_path.exists():
+        raise FileNotFoundError(f"v3 geojson not found at {geojson_path}")
 
-    # Polity id -> name (for normalisation / trivial-wrapper detection).
-    name_conn = sqlite3.connect(clio_db)
-    name_conn.row_factory = sqlite3.Row
-    ncur = name_conn.cursor()
-    ncur.execute("SELECT id, name FROM polities")
-    name_of = {r["id"]: r["name"] for r in ncur}
-    name_conn.close()
+    # Name -> candidate ids, classified by parenthesised vs real, with the
+    # individuals_count for tie-breaking.
+    by_name = defaultdict(list)
+    name_of = {}
+    for r in polity_rows:
+        name_of[r["id"]] = r["name"]
+        by_name[_norm(r["name"])].append(
+            {
+                "id": r["id"],
+                "paren": (r["name"] or "").strip().startswith("("),
+                "n": r.get("individuals_count") or 0,
+            }
+        )
 
-    def norm(pid):
-        """Normalised name — strip the wrapping parens cliopatria uses for metas."""
-        n = (name_of.get(pid) or "").strip()
-        return n.lstrip("(").rstrip(")").strip()
+    def resolve(name, prefer_paren):
+        """Best Supabase id for a geojson name (prefer real polity, else paren)."""
+        cands = by_name.get(_norm(name))
+        if not cands:
+            return None
+        cands = sorted(
+            cands,
+            key=lambda c: (c["paren"] == prefer_paren, c["n"], -c["id"]),
+            reverse=True,
+        )
+        return cands[0]["id"]
 
-    # Immediate parent links: a polity points at its level1_id parent.
-    immediate_parent = {
-        r["polity_id"]: r["level1_id"]
-        for r in rows
-        if r["is_child"] and r["level1_id"] is not None
-    }
+    feats = json.load(open(geojson_path))["features"]
 
-    # Children grouped by their immediate parent.
+    # Collect parent links per child: territorial (MemberOf) and relation
+    # (a RELATION's Components). child_id -> {"terr": set, "rel": set}.
+    parents = defaultdict(lambda: {"terr": set(), "rel": set()})
+    for f in feats:
+        p = f["properties"]
+        if p.get("MemberOf"):
+            cid = resolve(p["Name"], prefer_paren=False)
+            pid = resolve(p["MemberOf"], prefer_paren=False)
+            if cid is not None and pid is not None and cid != pid:
+                parents[cid]["terr"].add(pid)
+        if p["Type"] == "RELATION" and p.get("Components"):
+            rid = resolve(p["Name"], prefer_paren=True)
+            if rid is not None:
+                for comp in p["Components"].split(";"):
+                    cid = resolve(comp, prefer_paren=False)
+                    if cid is not None and cid != rid:
+                        parents[cid]["rel"].add(rid)
+
+    # Children grouped by every candidate parent — used to score "meta-ness".
+    cand_children = defaultdict(set)
+    for cid, ps in parents.items():
+        for pid in ps["terr"] | ps["rel"]:
+            cand_children[pid].add(cid)
+
+    def n_meta_children(pid):
+        own = _norm(name_of.get(pid, ""))
+        return len({_norm(name_of.get(c, "")) for c in cand_children[pid]} - {own})
+
+    # Pick ONE parent per child (drill-up is single-parent): prefer a territorial
+    # parent, then the candidate that groups the most distinct polities (the major
+    # empire / the real meta), tie-break by id.
+    def choose(cid):
+        ps = parents[cid]
+        terr = sorted(ps["terr"], key=lambda x: (n_meta_children(x), -x), reverse=True)
+        rel = sorted(ps["rel"], key=lambda x: (n_meta_children(x), -x), reverse=True)
+        for pid in terr + rel:
+            return pid
+        return None
+
+    immediate_parent = {cid: choose(cid) for cid in parents}
+    immediate_parent = {c: p for c, p in immediate_parent.items() if p is not None}
+
     children = defaultdict(list)
-    for pid, par in immediate_parent.items():
-        children[par].append(pid)
+    for cid, pid in immediate_parent.items():
+        children[pid].append(cid)
 
-    # A node is a REAL meta only if it groups at least two *distinct* polities
-    # (by normalised name, excluding its own paren twin). This drops:
-    #   - trivial wrappers like "(Roman Empire)" -> "Roman Empire" (0 distinct), and
-    #   - degenerate single-member metas like "(Merovingian Empire)" -> only
-    #     "Kingdom of the Franks" (1 distinct),
-    # so a meta always contains more than one entity (BUN-1139 review feedback).
+    # A REAL meta groups >= 2 distinct polities (by name, excluding its own twin).
     def distinct_children(par):
-        par_norm = norm(par)
-        return {norm(k) for k in children[par] if norm(k) != par_norm}
+        own = _norm(name_of.get(par, ""))
+        return {_norm(name_of.get(k, "")) for k in children[par] if _norm(name_of.get(k, "")) != own}
 
     real_meta = {par for par in children if len(distinct_children(par)) >= 2}
-    not_meta = set(children) - real_meta  # collapse these out of the hierarchy
+    not_meta = set(children) - real_meta
 
     def effective_parent(pid):
-        """Walk up past non-meta groupings to the first real meta (or None)."""
         seen = set()
         cur_p = immediate_parent.get(pid)
         while cur_p is not None and cur_p in not_meta and cur_p not in seen:
@@ -123,10 +167,7 @@ def build_hierarchy_mapping(clio_db: Path):
             cur_p = immediate_parent.get(cur_p)
         return cur_p
 
-    # Build the cleaned parent map, then derive metas + depth from it.
-    all_ids = set(immediate_parent) | {
-        p for ks in children.values() for p in ks
-    } | set(children)
+    all_ids = set(immediate_parent) | set(children)
     parent_of = {pid: effective_parent(pid) for pid in all_ids}
     real_meta_ids = {p for p in parent_of.values() if p is not None}
 
@@ -138,21 +179,41 @@ def build_hierarchy_mapping(clio_db: Path):
             cur_p = parent_of.get(cur_p)
         return d
 
-    mapping = {}
-    for pid in all_ids:
-        mapping[pid] = {
+    mapping = {
+        pid: {
             "parent_id": parent_of.get(pid),
             "is_meta": pid in real_meta_ids,
             "depth": depth_of(pid),
         }
+        for pid in all_ids
+    }
 
     n_child = sum(1 for v in mapping.values() if v["parent_id"] is not None)
     n_meta = sum(1 for v in mapping.values() if v["is_meta"])
     print(
-        f"  hierarchy rows: {len(mapping)} | with real parent: {n_child} | "
-        f"real metas: {n_meta} | collapsed non-metas: {len(not_meta)}"
+        f"  source: v3 geojson | mapped polities: {len(mapping)} | "
+        f"with parent: {n_child} | real metas: {n_meta} | collapsed: {len(not_meta)}"
     )
     return mapping
+
+
+def fetch_polities(supabase) -> list:
+    """All Supabase polities (id, name, individuals_count) for name resolution."""
+    rows, page, page_size = [], 0, 1000
+    while True:
+        resp = (
+            supabase.table("polities")
+            .select("id, name, individuals_count")
+            .range(page * page_size, page * page_size + page_size - 1)
+            .execute()
+        )
+        if not resp.data:
+            break
+        rows.extend(resp.data)
+        if len(resp.data) < page_size:
+            break
+        page += 1
+    return rows
 
 
 def backup_polities(supabase) -> Path:
@@ -241,16 +302,21 @@ def main():
         restore(supabase, Path(args.restore))
         return
 
-    print("Building hierarchy mapping from cliopatria.db ...")
-    mapping = build_hierarchy_mapping(CLIO_DB_PATH)
+    supabase = get_supabase_client()
+    polity_rows = fetch_polities(supabase)
+    print("Building hierarchy mapping from v3 geojson ...")
+    mapping = build_hierarchy_mapping(GEOJSON_PATH, polity_rows)
 
     if args.dry_run:
-        print("Dry run — no writes. Sample:")
-        for pid, v in list(mapping.items())[:8]:
-            print("  ", pid, v)
+        name_of = {r["id"]: r["name"] for r in polity_rows}
+        print("Dry run — no writes. Metas (sample):")
+        metas = [pid for pid, v in mapping.items() if v["is_meta"]]
+        for pid in metas[:12]:
+            kids = [name_of.get(c) for c, v in mapping.items() if v["parent_id"] == pid]
+            print(f"  {name_of.get(pid)} ({len(kids)} children): {kids[:6]}")
+        print(f"  total metas: {len(metas)}")
         return
 
-    supabase = get_supabase_client()
     print("Backing up current polities ...")
     backup_polities(supabase)
     print("Applying hierarchy mapping ...")
