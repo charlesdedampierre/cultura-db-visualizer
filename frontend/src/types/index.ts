@@ -60,6 +60,8 @@ export interface PaginatedIndividuals {
 export interface PolityChild {
   id: number;
   name: string;
+  from_year: number | null;
+  to_year: number | null;
 }
 
 export interface PolityDetails {

@@ -125,6 +125,39 @@ function calculateCentroid(geometry: GeoJSON.Geometry): [number, number] | null 
   return null;
 }
 
+// Top-centre of a geometry's largest polygon — used to place a meta's name as a
+// title above its territory, so it doesn't collide with the central sub-polity
+// label (BUN-1139 review).
+function calculateTopCenter(geometry: GeoJSON.Geometry): [number, number] | null {
+  const ringTop = (ring: number[][]): { area: number; lon: number; lat: number } => {
+    let area = 0;
+    for (let i = 0; i < ring.length - 1; i++) {
+      area += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+    }
+    const lons = ring.map((c) => c[0]);
+    const lats = ring.map((c) => c[1]);
+    return {
+      area: Math.abs(area / 2),
+      lon: (Math.min(...lons) + Math.max(...lons)) / 2,
+      lat: Math.max(...lats),
+    };
+  };
+
+  let best: { area: number; lon: number; lat: number } | null = null;
+  const consider = (ring: number[][]) => {
+    if (!ring || ring.length < 3) return;
+    const t = ringTop(ring);
+    if (!best || t.area > best.area) best = t;
+  };
+
+  if (geometry.type === 'Polygon') {
+    consider((geometry.coordinates as number[][][])[0]);
+  } else if (geometry.type === 'MultiPolygon') {
+    for (const poly of geometry.coordinates as number[][][][]) consider(poly[0]);
+  }
+  return best ? [(best as { lon: number }).lon, (best as { lat: number }).lat] : null;
+}
+
 const MAP_STYLES: Record<'light' | 'terrain' | 'satellite', maplibregl.StyleSpecification> = {
   light: {
     version: 8,
@@ -397,13 +430,18 @@ export function WorldMap() {
         type: 'fill',
         source: 'polities',
         paint: {
-          'fill-color': ['case', ['get', 'selected'], '#2563eb', ['get', 'color']],
-          // Selected stands out strongest; meta fill kept very light so its
-          // sub-polities show through.
+          // Meta always stays light (even when it's the selected polity) so its
+          // sub-polities show through; a selected sub-polity turns blue.
+          'fill-color': [
+            'case',
+            ['get', 'isMeta'], ['get', 'color'],
+            ['get', 'selected'], '#2563eb',
+            ['get', 'color'],
+          ],
           'fill-opacity': [
             'case',
+            ['get', 'isMeta'], 0.06,
             ['get', 'selected'], 0.55,
-            ['get', 'isMeta'], 0.08,
             0.3,
           ],
         },
@@ -414,18 +452,18 @@ export function WorldMap() {
         type: 'line',
         source: 'polities',
         paint: {
-          // Selected gets the strongest, brightest outline; meta a thick dark
-          // border; sub-polities in focus a medium border (BUN-1139 review).
+          // Meta keeps its thick dark border; a selected sub-polity gets the
+          // brightest, thickest outline; others medium when in focus.
           'line-color': [
             'case',
-            ['get', 'selected'], '#1d4ed8',
             ['get', 'isMeta'], '#92400e',
+            ['get', 'selected'], '#1d4ed8',
             ['get', 'color'],
           ],
           'line-width': [
             'case',
-            ['get', 'selected'], 5,
             ['get', 'isMeta'], 4,
+            ['get', 'selected'], 5,
             ['get', 'inFocus'], 2.5,
             1,
           ],
@@ -731,21 +769,27 @@ export function WorldMap() {
       geometry: polity.geometry!,
     }));
 
-    // Create point features for labels at centroids
+    // Create point features for labels. The meta name sits as a title at the top
+    // of its territory; sub-polities keep their centroid (BUN-1139 review).
     const labelFeatures = politiesWithArea
-      .filter(({ centroid }) => centroid !== null)
-      .map(({ polity, area, centroid }) => ({
+      .map(({ polity, area, centroid }) => {
+        const isMeta = polity.type === 'meta';
+        const pos = isMeta ? calculateTopCenter(polity.geometry!) : centroid;
+        return { polity, area, isMeta, pos };
+      })
+      .filter(({ pos }) => pos !== null)
+      .map(({ polity, area, isMeta, pos }) => ({
         type: 'Feature' as const,
         properties: {
           id: polity.id,
           name: displayPolityName(polity.name),
-          isMeta: polity.type === 'meta',
+          isMeta,
           forceLabel: inFocus,
           area,
         },
         geometry: {
           type: 'Point' as const,
-          coordinates: centroid!,
+          coordinates: pos!,
         },
       }));
 

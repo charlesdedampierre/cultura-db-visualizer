@@ -16,14 +16,16 @@ function formatYear(year: number | null): string {
 }
 
 export function PolityPanel() {
-  const { selectedPolityId, individualsCount, focusedMetaId, setFocusedMetaId, setSelectedPolityId, setCenterOnPolityId } = useAppStore();
+  const { selectedPolityId, individualsCount, focusedMetaId, setFocusedMetaId, setSelectedPolityId, setCenterOnPolityId, setSelectedYear } = useAppStore();
 
   // Clicking a sub-polity drops out of the meta-focus view back to the normal
-  // map with that single polity highlighted and centred (BUN-1139 review).
-  const selectChildInNormalView = (childId: number) => {
+  // map with that polity highlighted and centred. Jump to its creation year so
+  // a child that isn't active at the current year still appears (BUN-1139 review).
+  const selectChildInNormalView = (child: { id: number; from_year: number | null }) => {
+    if (child.from_year != null) setSelectedYear(child.from_year);
     setFocusedMetaId(null);
-    setSelectedPolityId(childId);
-    setCenterOnPolityId(childId);
+    setSelectedPolityId(child.id);
+    setCenterOnPolityId(child.id);
   };
 
   const { data: polity } = useQuery({
@@ -109,7 +111,7 @@ export function PolityPanel() {
             {polity.children.map((child) => (
               <button
                 key={child.id}
-                onClick={() => selectChildInNormalView(child.id)}
+                onClick={() => selectChildInNormalView(child)}
                 className="text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded transition-colors"
               >
                 {displayPolityName(child.name)}

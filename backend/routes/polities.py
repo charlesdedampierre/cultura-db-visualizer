@@ -372,7 +372,31 @@ def get_polity(polity_id: int):
     ).eq("parent_id", polity_id).execute()
     children_deduped = _dedupe_children(children_resp.data)
     children_deduped.sort(key=lambda c: _norm_name(c["name"]))
-    children = [{"id": c["id"], "name": c["name"]} for c in children_deduped]
+
+    # Per-child active range, so clicking a sub-polity can jump the timeline to
+    # its creation year (BUN-1139 review: inactive children did nothing on click).
+    child_ids = [c["id"] for c in children_deduped]
+    child_from: dict[int, int] = {}
+    child_to: dict[int, int] = {}
+    if child_ids:
+        cp = db.table("polity_periods").select(
+            "polity_id, from_year, to_year"
+        ).in_("polity_id", child_ids).execute().data
+        for row in cp:
+            pid = row["polity_id"]
+            if row["from_year"] is not None:
+                child_from[pid] = min(child_from.get(pid, row["from_year"]), row["from_year"])
+            if row["to_year"] is not None:
+                child_to[pid] = max(child_to.get(pid, row["to_year"]), row["to_year"])
+    children = [
+        {
+            "id": c["id"],
+            "name": c["name"],
+            "from_year": child_from.get(c["id"]),
+            "to_year": child_to.get(c["id"]),
+        }
+        for c in children_deduped
+    ]
 
     return {
         "id": polity["id"],
