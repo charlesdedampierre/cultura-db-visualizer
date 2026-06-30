@@ -368,7 +368,7 @@ def get_polity(polity_id: int):
             parent_name = parent_resp.data[0]["name"]
 
     children_resp = db.table("polities").select(
-        "id, name, individuals_count"
+        "id, name, individuals_count, is_meta"
     ).eq("parent_id", polity_id).execute()
     children_deduped = _dedupe_children(children_resp.data)
     children_deduped.sort(key=lambda c: _norm_name(c["name"]))
@@ -394,6 +394,7 @@ def get_polity(polity_id: int):
             "name": c["name"],
             "from_year": child_from.get(c["id"]),
             "to_year": child_to.get(c["id"]),
+            "is_meta": c.get("is_meta", False),
         }
         for c in children_deduped
     ]

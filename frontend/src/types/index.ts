@@ -62,6 +62,7 @@ export interface PolityChild {
   name: string;
   from_year: number | null;
   to_year: number | null;
+  is_meta: boolean;
 }
 
 export interface PolityDetails {

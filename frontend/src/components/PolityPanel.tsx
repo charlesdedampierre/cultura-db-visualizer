@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, ChevronUp, X } from 'lucide-react';
+import { ExternalLink, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { useAppStore } from '../store';
 import { displayPolityName } from '../lib/utils';
 import { getPolityDetails } from '../api';
+import type { PolityChild } from '../types';
 import { EvolutionChart } from './EvolutionChart';
 import { OccupationsChart } from './OccupationsChart';
 import { IndividualsList } from './IndividualsList';
@@ -16,13 +17,24 @@ function formatYear(year: number | null): string {
 }
 
 export function PolityPanel() {
-  const { selectedPolityId, individualsCount, focusedMetaId, setFocusedMetaId, setSelectedPolityId, setCenterOnPolityId, setSelectedYear } = useAppStore();
+  const { selectedYear, selectedPolityId, individualsCount, focusedMetaId, setFocusedMetaId, setSelectedPolityId, setCenterOnPolityId, setSelectedYear } = useAppStore();
 
-  // Clicking a sub-polity drops out of the meta-focus view back to the normal
-  // map with that polity highlighted and centred. Jump to its creation year so
-  // a child that isn't active at the current year still appears (BUN-1139 review).
-  const selectChildInNormalView = (child: { id: number; from_year: number | null }) => {
-    if (child.from_year != null) setSelectedYear(child.from_year);
+  // Clicking a sub-polity:
+  //  - if it's itself a meta -> drill DOWN into it (so multi-level hierarchies
+  //    aren't blocked at the second level);
+  //  - otherwise drop to the normal map, highlighted + centred, and only jump
+  //    the timeline to its creation year if it isn't active at the current year
+  //    (BUN-1139 review).
+  const handleChild = (child: PolityChild) => {
+    if (child.is_meta) {
+      setFocusedMetaId(child.id);
+      setCenterOnPolityId(child.id);
+      return;
+    }
+    const activeNow =
+      child.from_year != null && child.to_year != null &&
+      selectedYear >= child.from_year && selectedYear <= child.to_year;
+    if (!activeNow && child.from_year != null) setSelectedYear(child.from_year);
     setFocusedMetaId(null);
     setSelectedPolityId(child.id);
     setCenterOnPolityId(child.id);
@@ -56,11 +68,11 @@ export function PolityPanel() {
             {polity.parent_id != null && (
               <button
                 onClick={() => setFocusedMetaId(polity.parent_id!)}
-                className="inline-flex items-center gap-1 text-xs font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 px-2 py-1 rounded transition-colors"
-                title="Show the broader meta level this belongs to"
+                className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-900 transition-colors"
+                title="Go up to the meta-polity this belongs to"
               >
                 <ChevronUp className="h-3.5 w-3.5" />
-                Up to {displayPolityName(polity.parent_name)}
+                {displayPolityName(polity.parent_name)}
               </button>
             )}
 
@@ -68,11 +80,11 @@ export function PolityPanel() {
             {focusedMetaId != null && (
               <button
                 onClick={() => setFocusedMetaId(null)}
-                className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-800 px-1.5 py-1 rounded transition-colors"
+                className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-700 transition-colors"
                 title="Exit the meta view"
               >
                 <X className="h-3.5 w-3.5" />
-                Exit meta
+                Exit
               </button>
             )}
           </div>
@@ -81,8 +93,8 @@ export function PolityPanel() {
         <div className="flex items-baseline gap-3">
           <h2 className="text-xl font-semibold text-gray-900">{displayPolityName(polity?.name)}</h2>
           {polity?.is_meta && (
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded self-center">
-              Meta
+            <span className="text-[10px] font-semibold tracking-wide text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full self-center">
+              meta-polity
             </span>
           )}
           {polity && (
@@ -111,10 +123,17 @@ export function PolityPanel() {
             {polity.children.map((child) => (
               <button
                 key={child.id}
-                onClick={() => selectChildInNormalView(child)}
-                className="text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded transition-colors"
+                onClick={() => handleChild(child)}
+                title={child.is_meta ? 'Open this meta-polity' : undefined}
+                className={
+                  'inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full border transition-colors ' +
+                  (child.is_meta
+                    ? 'text-amber-800 bg-amber-50 border-amber-200 hover:bg-amber-100'
+                    : 'text-slate-700 bg-slate-100 border-slate-200 hover:bg-slate-200')
+                }
               >
                 {displayPolityName(child.name)}
+                {child.is_meta && <ChevronDown className="h-3 w-3" />}
               </button>
             ))}
           </div>
