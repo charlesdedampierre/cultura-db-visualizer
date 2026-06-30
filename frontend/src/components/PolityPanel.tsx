@@ -7,6 +7,7 @@ import type { PolityChild } from '../types';
 import { EvolutionChart } from './EvolutionChart';
 import { OccupationsChart } from './OccupationsChart';
 import { IndividualsList } from './IndividualsList';
+import { RelationTypesInfo } from './RelationTypesInfo';
 
 function formatYear(year: number | null): string {
   if (year === null) return '?';
@@ -114,6 +115,10 @@ export function PolityPanel() {
               )}
             </>
           )}
+          {/* Reference: the kinds of relationship that can link polities (BUN-1139) */}
+          <div className="ml-auto self-center">
+            <RelationTypesInfo />
+          </div>
         </div>
 
         {/* Drill down: granular levels contained in this meta */}
