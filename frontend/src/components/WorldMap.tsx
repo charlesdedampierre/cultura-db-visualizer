@@ -818,9 +818,13 @@ export function WorldMap() {
     }
   }, [politiesData, selectedPolityId, focusedMetaId, mapReady]);
 
-  // When entering a meta, jump the timeline into the meta's lifespan so all its
-  // sub-polities are active and visible (BUN-1139 review: Abbasid/Ayyubid,
-  // Habsburg union were empty because the year sat outside the meta's range).
+  // When entering a meta, stay at the current year so the user sees the meta's
+  // contents *at that date* and can scrub the timeline to watch its sub-polities
+  // evolve over time (BUN-1139: e.g. open a meta while viewing Upper Burgundy and
+  // remain on that year). Only jump when the current year falls entirely outside
+  // the meta's lifespan — otherwise it would render empty (the earlier Abbasid/
+  // Ayyubid, Habsburg-union case). In that case we land mid-life, where its
+  // sub-polities are most likely all active.
   const { data: focusedMeta } = useQuery({
     queryKey: ['polityDetails', focusedMetaId],
     queryFn: () => getPolityDetails(focusedMetaId!),
@@ -837,13 +841,13 @@ export function WorldMap() {
     if (!focusedMeta || jumpedForMetaRef.current === focusedMetaId) return;
     const { from_year, to_year } = focusedMeta;
     if (from_year != null && to_year != null) {
-      // Land mid-life: at a meta's start year its sub-polities often don't exist
-      // yet (e.g. the Frankish partitions post-date the Carolingian Empire's
-      // founding). Jump once per focus, then let the user scrub freely.
-      setSelectedYear(Math.round((from_year + to_year) / 2));
+      const activeNow = selectedYear >= from_year && selectedYear <= to_year;
+      if (!activeNow) {
+        setSelectedYear(Math.round((from_year + to_year) / 2));
+      }
       jumpedForMetaRef.current = focusedMetaId;
     }
-  }, [focusedMetaId, focusedMeta, setSelectedYear]);
+  }, [focusedMetaId, focusedMeta, selectedYear, setSelectedYear]);
 
   // Update cities when polity changes or showCities changes
   // Cities are filtered to only show within the current polity's borders
